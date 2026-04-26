@@ -280,6 +280,144 @@ export class LifeService {
     return updated;
   }
 
+  async seedRoutines(userId: string) {
+    const existing = await this.prisma.routine.findFirst({ where: { userId } });
+    if (existing) return;
+
+    await this.prisma.routine.create({
+      data: {
+        userId,
+        name: 'Weekday',
+        blocks: {
+          create: [
+            { title: 'Morning Ritual', lifeArea: LifeArea.MINDFULNESS, startMinutes: 420, durationMins: 60 },
+            { title: 'Deep Work Session 1', lifeArea: LifeArea.WORK, startMinutes: 540, durationMins: 120 },
+            { title: 'Lunch & Walk', lifeArea: LifeArea.HEALTH, startMinutes: 720, durationMins: 60 },
+            { title: 'Deep Work Session 2', lifeArea: LifeArea.WORK, startMinutes: 840, durationMins: 120 },
+            { title: 'Skill Building', lifeArea: LifeArea.LEARNING, startMinutes: 1020, durationMins: 60 },
+            { title: 'Exercise', lifeArea: LifeArea.HEALTH, startMinutes: 1140, durationMins: 60 },
+            { title: 'Social / Family', lifeArea: LifeArea.SOCIAL, startMinutes: 1200, durationMins: 90 },
+            { title: 'Wind Down', lifeArea: LifeArea.MINDFULNESS, startMinutes: 1320, durationMins: 60 },
+          ],
+        },
+      },
+    });
+
+    await this.prisma.routine.create({
+      data: {
+        userId,
+        name: 'Weekend',
+        blocks: {
+          create: [
+            { title: 'Sleep In & Slow Morning', lifeArea: LifeArea.HEALTH, startMinutes: 540, durationMins: 120 },
+            { title: 'Adventure / Social', lifeArea: LifeArea.SOCIAL, startMinutes: 660, durationMins: 240 },
+            { title: 'Creative Hobby', lifeArea: LifeArea.CREATIVITY, startMinutes: 900, durationMins: 120 },
+            { title: 'Life Admin / Finance', lifeArea: LifeArea.FINANCE, startMinutes: 1020, durationMins: 60 },
+            { title: 'Relaxation', lifeArea: LifeArea.MINDFULNESS, startMinutes: 1200, durationMins: 120 },
+          ],
+        },
+      },
+    });
+  }
+
+  // ── Magic Planner ─────────────────────────────────────────────────────────
+
+  async magicPlan(userId: string, prompt: string, dateStr: string) {
+    const date = startOfDay(new Date(dateStr));
+    const [tasks, existingBlocks] = await Promise.all([
+      this.prisma.task.findMany({ where: { userId, completedAt: null } }),
+      this.prisma.timeBlock.findMany({ where: { userId, date } }),
+    ]);
+
+    const context = {
+      currentTime: new Date().toISOString(),
+      tasks: tasks.map((t) => ({ id: t.id, title: t.title, importance: t.importance })),
+      existingBlocks: existingBlocks.map((b) => ({ start: b.startMinutes, end: b.startMinutes + b.durationMins, title: b.title })),
+    };
+
+    const suggested = await this.ai.planDay(prompt, context);
+
+    // Filter out any overlaps just in case
+    return this.prisma.$transaction(
+      suggested.map((b) =>
+        this.prisma.timeBlock.create({
+          data: {
+            userId,
+            title: b.title,
+            lifeArea: b.lifeArea,
+            date,
+            startMinutes: b.startMinutes,
+            durationMins: b.durationMins,
+            taskId: b.taskId,
+            note: b.note,
+          },
+        }),
+      ),
+    );
+  }
+
+  // ── Routines ───────────────────────────────────────────────────────────────
+
+  async getRoutines(userId: string) {
+    await this.seedRoutines(userId);
+    return this.prisma.routine.findMany({
+      where: { userId },
+      include: { blocks: { orderBy: { startMinutes: 'asc' } } },
+    });
+  }
+
+  async applyRoutine(userId: string, routineName: string, dateStr: string) {
+    const date = startOfDay(new Date(dateStr));
+    const routine = await this.prisma.routine.findFirstOrThrow({
+      where: { userId, name: routineName },
+      include: { blocks: true },
+    });
+
+    await this.prisma.timeBlock.deleteMany({ where: { userId, date } });
+
+    return this.prisma.$transaction(
+      routine.blocks.map((b) =>
+        this.prisma.timeBlock.create({
+          data: {
+            userId,
+            title: b.title,
+            lifeArea: b.lifeArea,
+            date,
+            startMinutes: b.startMinutes,
+            durationMins: b.durationMins,
+          },
+        }),
+      ),
+    );
+  }
+
+  async saveRoutine(userId: string, name: string, blocks: any[]) {
+    return this.prisma.$transaction(async (tx) => {
+      const routine = await tx.routine.upsert({
+        where: { userId_name: { userId, name } },
+        update: {},
+        create: { userId, name },
+      });
+
+      await tx.routineBlock.deleteMany({ where: { routineId: routine.id } });
+
+      return tx.routine.update({
+        where: { id: routine.id },
+        data: {
+          blocks: {
+            create: blocks.map((b) => ({
+              title: b.title,
+              lifeArea: b.lifeArea,
+              startMinutes: b.startMinutes,
+              durationMins: b.durationMins,
+            })),
+          },
+        },
+        include: { blocks: true },
+      });
+    });
+  }
+
   private async guruContext(userId: string) {
     const [tasks, habits, progress, diary] = await Promise.all([
       this.today(userId),

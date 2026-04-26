@@ -38,6 +38,7 @@ model User {
   daily        DailySummary[]
   guru         GuruMessage[]
   timeBlocks   TimeBlock[]
+  routines     Routine[]
 }
 
 model InputEntry {
@@ -164,3 +165,22 @@ model GuruMessage {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model Routine {
+  id        String         @id @default(cuid())
+  userId    String
+  name      String         // e.g., "Weekday", "Weekend"
+  blocks    RoutineBlock[]
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+}
+
+model RoutineBlock {
+  id           String    @id @default(cuid())
+  routineId    String
+  title        String
+  lifeArea     LifeArea  @default(WORK)
+  startMinutes Int       // minutes from midnight (0-1439)
+  durationMins Int       @default(60)
+  routine      Routine   @relation(fields: [routineId], references: [id], onDelete: Cascade)
+}

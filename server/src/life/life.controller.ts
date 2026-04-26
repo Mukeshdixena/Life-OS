@@ -105,5 +105,36 @@ export class LifeController {
   doneTimeBlock(@Req() req: RequestWithUser, @Param('id') id: string) {
     return this.life.doneTimeBlock(req.user.id, id);
   }
+
+  @Post('magic-plan')
+  magicPlan(
+    @Req() req: RequestWithUser,
+    @Body() dto: { prompt: string; date: string },
+  ) {
+    return this.life.magicPlan(req.user.id, dto.prompt, dto.date);
+  }
+
+  @Get('routines')
+  getRoutines(@Req() req: RequestWithUser) {
+    return this.life.getRoutines(req.user.id);
+  }
+
+  @Post('routines/apply')
+  applyRoutine(
+    @Req() req: RequestWithUser,
+    @Body() dto: { name: string; date: string },
+  ) {
+    return this.life.applyRoutine(req.user.id, dto.name, dto.date);
+  }
+
+  @Post('routines')
+  saveRoutine(
+    @Req() req: RequestWithUser,
+    @Body() dto: { name: string; blocks: any[] },
+  ) {
+    return this.life.saveRoutine(req.user.id, dto.name, dto.blocks);
+  }
 }
+
+
 

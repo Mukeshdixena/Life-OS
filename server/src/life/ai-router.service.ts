@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LifeArea, TaskImportance } from '@prisma/client';
 import { addDays, formatISO, startOfDay } from 'date-fns';
-import { RoutedMeaning } from './life.types';
+import { RoutedMeaning, RoutedTimeBlock } from './life.types';
 
 const areaKeywords: Record<LifeArea, string[]> = {
   LEARNING: ['study', 'studied', 'read', 'course', 'learn', 'assignment', 'exam', 'practice'],
@@ -238,6 +238,46 @@ export class AiRouterService {
 
   private titleCase(value: string) {
     return value.replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  async planDay(prompt: string, context: any): Promise<RoutedTimeBlock[]> {
+    const apiKey = this.config.get<string>('OPENROUTER_API_KEY');
+    const model = this.config.get<string>('OPENROUTER_MODEL');
+    if (!apiKey || !model) return [];
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:5173',
+          'X-Title': 'Life OS',
+        },
+        body: JSON.stringify({
+          model,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: `You are a high-performance Life OS Strategist. Your goal is to design an optimized plan for the rest of the day.
+              Use the provided user context (tasks, habits, current time, existing blocks) to fill the gaps intelligently.
+              Return JSON: { blocks: [{title, startMinutes, durationMins, lifeArea, taskId, note}] }.
+              LifeArea: LEARNING, HEALTH, WORK, CREATIVITY, SOCIAL, MINDFULNESS, FINANCE.
+              startMinutes: minutes from midnight (0-1439).
+              Ensure blocks do not overlap with existing blocks and start AFTER the current time.
+              Prioritize urgent tasks and health/mindfulness if gaps allow.`,
+            },
+            { role: 'user', content: JSON.stringify({ prompt, context, now: new Date().toISOString() }) },
+          ],
+        }),
+      });
+      if (!response.ok) return [];
+      const json = await response.json();
+      return json.choices?.[0]?.message?.content ? JSON.parse(json.choices[0].message.content).blocks : [];
+    } catch {
+      return [];
+    }
   }
 
   private localGuruQuestion(message: string) {

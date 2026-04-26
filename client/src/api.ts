@@ -38,6 +38,18 @@ export type TimeBlock = {
   createdAt: string;
 };
 
+export type Routine = {
+  id: string;
+  name: string;
+  blocks: Array<{
+    id: string;
+    title: string;
+    lifeArea: LifeArea;
+    startMinutes: number;
+    durationMins: number;
+  }>;
+};
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('life-os-token');
   const response = await fetch(`${API_URL}${path}`, {

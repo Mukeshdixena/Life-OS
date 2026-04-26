@@ -11,3 +11,12 @@ export type RoutedMeaning = {
   productivity: number;
 };
 
+
+export type RoutedTimeBlock = {
+  title: string;
+  startMinutes: number;
+  durationMins: number;
+  lifeArea: LifeArea;
+  taskId?: string;
+  note?: string;
+};

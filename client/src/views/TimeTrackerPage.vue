@@ -5,9 +5,12 @@ import { api, Task, TimeBlock } from '../api';
 // ── State ──────────────────────────────────────────────────────────────────
 const blocks = ref<TimeBlock[]>([]);
 const tasks  = ref<Task[]>([]);
+const routines = ref<Routine[]>([]);
 const today  = ref(fmtDate(new Date()));
 const now    = ref(new Date());
 const saving = ref(false);
+const magicPlanning = ref(false);
+const magicPrompt = ref('');
 const error  = ref('');
 const showModal = ref(false);
 const editTarget = ref<TimeBlock | null>(null);
@@ -83,13 +86,59 @@ const freeMins     = computed(() => Math.max(0, 1440 - nowMinutes() - blockedMin
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 async function load() {
-  [blocks.value, tasks.value] = await Promise.all([
+  [blocks.value, tasks.value, routines.value] = await Promise.all([
     api<TimeBlock[]>(`/life/timeblocks?date=${today.value}`),
     api<Task[]>('/life/today'),
+    api<Routine[]>('/life/routines'),
   ]);
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
+async function runMagicPlan() {
+  if (!magicPrompt.value.trim()) magicPrompt.value = 'Optimize my day';
+  magicPlanning.value = true;
+  try {
+    await api('/life/magic-plan', { 
+      method: 'POST', 
+      body: JSON.stringify({ prompt: magicPrompt.value, date: today.value }) 
+    });
+    magicPrompt.value = '';
+    await load();
+  } catch (e: any) {
+    error.value = e.message;
+  } finally {
+    magicPlanning.value = false;
+  }
+}
+
+async function useRoutine(name: string) {
+  if (!confirm(`Apply "${name}" routine? This will clear current blocks for ${today.value}.`)) return;
+  try {
+    await api('/life/routines/apply', { 
+      method: 'POST', 
+      body: JSON.stringify({ name, date: today.value }) 
+    });
+    await load();
+  } catch (e: any) {
+    error.value = e.message;
+  }
+}
+
+async function saveCurrentAsRoutine(name: string) {
+  if (!blocks.value.length) return;
+  if (!confirm(`Save current day's plan as "${name}"? This will overwrite the existing "${name}" routine.`)) return;
+  try {
+    await api('/life/routines', { 
+      method: 'POST', 
+      body: JSON.stringify({ name, blocks: blocks.value }) 
+    });
+    await load();
+    alert(`Successfully saved as "${name}"`);
+  } catch (e: any) {
+    error.value = e.message;
+  }
+}
+
 function openAdd(clickMinutes?: number) {
   editTarget.value = null;
   const snap = clickMinutes ?? nowMinutes();
@@ -216,6 +265,42 @@ onUnmounted(() => clearInterval(ticker));
       </span>
       <button class="btn-icon" @click="nextDay">›</button>
       <button class="primary add-btn" @click="openAdd()">＋ Add Block</button>
+    </div>
+
+    <!-- Magic Planner Bar -->
+    <div class="magic-planner-bar">
+      <div class="magic-input-wrap">
+        <span class="magic-icon">🪄</span>
+        <input 
+          v-model="magicPrompt" 
+          type="text" 
+          placeholder="Magic plan: 'Fill the rest of my day with work and a walk'..." 
+          @keyup.enter="runMagicPlan"
+        />
+        <button class="magic-btn" :disabled="magicPlanning" @click="runMagicPlan">
+          {{ magicPlanning ? 'Planning...' : 'Generate' }}
+        </button>
+      </div>
+      <div class="routine-actions">
+        <span class="routine-label">Routines:</span>
+        <div v-for="r in routines" :key="r.id" class="routine-group">
+          <button 
+            class="btn-ghost-small" 
+            title="Load this routine"
+            @click="useRoutine(r.name)"
+          >{{ r.name }}</button>
+          <button 
+            class="btn-icon-tiny" 
+            title="Overwrite with current plan"
+            @click="saveCurrentAsRoutine(r.name)"
+          >💾</button>
+        </div>
+        <button 
+          class="btn-ghost-small" 
+          style="border-style: dashed; margin-left: 4px;"
+          @click="saveCurrentAsRoutine(prompt('Routine Name?','My Routine') || '')"
+        >＋ Save Current</button>
+      </div>
     </div>
 
     <!-- Timeline -->
@@ -369,7 +454,7 @@ onUnmounted(() => clearInterval(ticker));
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 .date-label {
   font-family: 'Outfit', sans-serif;
@@ -389,6 +474,105 @@ onUnmounted(() => clearInterval(ticker));
   border-radius: 999px;
 }
 .add-btn { padding: 9px 18px; font-size: 0.88rem; margin-left: auto; }
+
+/* Magic Planner Bar */
+.magic-planner-bar {
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.magic-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 6px 4px 12px;
+}
+
+.magic-icon { font-size: 1.2rem; }
+.magic-input-wrap input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.magic-btn {
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  color: white;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.magic-btn:hover:not(:disabled) { transform: scale(1.02); }
+.magic-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.routine-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.routine-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface-1);
+  padding: 1px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.routine-group .btn-ghost-small {
+  border: 0;
+}
+.btn-icon-tiny {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.btn-icon-tiny:hover {
+  background: var(--line);
+}
+.routine-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-ghost-small {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 0.72rem;
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-ghost-small:hover {
+  background: var(--line);
+  border-color: var(--primary);
+}
 
 /* Timeline container */
 .timeline-wrap {
