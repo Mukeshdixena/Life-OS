@@ -53,6 +53,16 @@ const nextMission = computed(() => {
   return upcoming.length > 0 ? upcoming[0] : null;
 });
 
+// Find Unconfirmed Past Missions
+const unconfirmedMissions = computed(() => {
+  return timeblocks.value.filter(b => {
+    const isPast = (b.startMinutes + b.durationMins) <= nowMinutes.value;
+    const isUnhandled = !b.completedAt && !b.note?.startsWith('Deviation:');
+    return isPast && isUnhandled;
+  });
+});
+const activeUnconfirmed = computed(() => unconfirmedMissions.value[0]);
+
 function formatTime(mins: number) {
   const h = Math.floor(mins / 60).toString().padStart(2, '0');
   const m = (mins % 60).toString().padStart(2, '0');
@@ -114,6 +124,52 @@ async function markMissionDone(block: TimeBlock) {
   }
 }
 
+async function logDeviation(block: TimeBlock, deviationText: string) {
+  try {
+    await api(`/life/timeblocks/${block.id}`, { 
+      method: 'PATCH', 
+      body: JSON.stringify({ note: `Deviation: ${deviationText}` }) 
+    });
+    await submit(`Failed Mission [${block.title}]. Deviated: ${deviationText}`, 10, 'Deviation');
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+const isRewriting = ref(false);
+const rewriteForm = ref({ title: '', lifeArea: 'WORK', durationMins: 60 });
+
+function startRewrite(block: TimeBlock) {
+  rewriteForm.value = { 
+    title: '', 
+    lifeArea: block.lifeArea, 
+    durationMins: block.durationMins 
+  };
+  isRewriting.value = true;
+}
+
+async function submitRewrite(block: TimeBlock) {
+  try {
+    // 1. Update the block with new truth
+    await api(`/life/timeblocks/${block.id}`, { 
+      method: 'PATCH', 
+      body: JSON.stringify({ 
+        title: rewriteForm.value.title,
+        lifeArea: rewriteForm.value.lifeArea,
+        durationMins: rewriteForm.value.durationMins,
+        note: `[Rewritten] Was originally: ${block.title}`
+      }) 
+    });
+    // 2. Mark it done
+    await api(`/life/timeblocks/${block.id}/done`, { method: 'PATCH' });
+    
+    await submit(`Rewrote History: Did [${rewriteForm.value.title}] instead of [${block.title}]`, 20, 'Reality Override');
+    isRewriting.value = false;
+  } catch(e) {
+    console.error(e);
+  }
+}
+
 async function quickCompleteTask(task: Task) {
   completedTaskIds.value.add(task.id);
   await submit(`Completed task: ${task.title}`, 50, 'Quest Complete');
@@ -124,8 +180,66 @@ function handleKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submit();
 }
 
+// --- Wake Up Tracker ---
+const wakeupTime = ref('07:00');
+const wakeupLogged = ref(false);
+
+function checkWakeup() {
+  const logged = localStorage.getItem(`wakeup_${todayStr.value}`);
+  if (logged) {
+    wakeupLogged.value = true;
+    wakeupTime.value = logged;
+  }
+}
+
+async function logWakeup() {
+  if (!wakeupTime.value) return;
+  await submit(`Woke up at ${wakeupTime.value}`, 20, 'Morning Protocol');
+  localStorage.setItem(`wakeup_${todayStr.value}`, wakeupTime.value);
+  wakeupLogged.value = true;
+}
+
+// --- Vice / Bad Habit Tracker ---
+const viceName = ref('');
+const viceDuration = ref<number | null>(null);
+
+async function confessVice() {
+  if (!viceName.value || !viceDuration.value) return;
+  
+  const name = viceName.value;
+  const duration = viceDuration.value;
+  
+  // Deal damage to player stats
+  mood.value = Math.max(1, mood.value - 2); // Takes 20% HP damage
+  
+  // Retroactively add this to the time tracker so it visually eats their day
+  const startMins = Math.max(0, nowMinutes.value - duration);
+  try {
+    await api('/life/timeblocks', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: `[Vice] ${name}`,
+        lifeArea: 'MINDFULNESS',
+        date: todayStr.value,
+        startMinutes: startMins,
+        durationMins: duration,
+        note: 'Deviation: Logged as a Vice',
+        completedAt: new Date().toISOString()
+      })
+    });
+  } catch(e) { console.error("Failed to log vice block", e); }
+  
+  // Submit the log and apply negative XP
+  await submit(`Confessed Vice: [${name}] for ${duration} mins. Took HP Damage.`, -15, 'Vice Confession');
+  
+  viceName.value = '';
+  viceDuration.value = null;
+  await load();
+}
+
 onMounted(() => {
   load();
+  checkWakeup();
   ticker = setInterval(() => { now.value = new Date(); }, 15000);
 });
 
@@ -138,7 +252,7 @@ onUnmounted(() => clearInterval(ticker));
     <!-- Player HUD -->
     <div class="player-hud panel glass">
       <div class="avatar-section">
-        <div class="avatar-ring">
+        <div class="avatar-ring" :class="{'damage-flash': mood < 5}">
           <img :src="'/life_os_avatar.png'" alt="Avatar" class="avatar-img" @error="$event.target.src='https://api.dicebear.com/7.x/bottts/svg?seed=LifeOS&backgroundColor=13161e'" />
         </div>
         <div class="player-info">
@@ -184,7 +298,54 @@ onUnmounted(() => clearInterval(ticker));
 
     <!-- MISSION CONTROL HEADER -->
     <div class="mission-control panel glass">
-      <div v-if="currentMission" class="active-mission">
+      
+      <!-- Unconfirmed Past Mission (Highest Priority to Clear) -->
+      <div v-if="activeUnconfirmed" class="active-mission unconfirmed-report">
+        <div class="mission-status pulse-text text-warn">⚠️ AFTER ACTION REPORT REQUIRED</div>
+        <p class="mission-prompt">You had a scheduled mission in the past that was not confirmed.</p>
+        <h1 class="mission-title">{{ activeUnconfirmed.title }}</h1>
+        <div class="mission-meta">
+          <span>⏰ {{ formatTime(activeUnconfirmed.startMinutes) }} - {{ formatTime(activeUnconfirmed.startMinutes + activeUnconfirmed.durationMins) }}</span>
+          <span class="badge" :class="'badge-' + activeUnconfirmed.lifeArea.toLowerCase()">{{ activeUnconfirmed.lifeArea }}</span>
+        </div>
+        
+        <div v-if="!isRewriting" class="mission-prompt">Did you actually do this as planned?</div>
+        
+        <div v-if="!isRewriting" class="mission-actions" style="flex-wrap: wrap;">
+           <button class="primary action-btn large-btn" @click="markMissionDone(activeUnconfirmed)">
+             YES, I COMPLETED IT ✓
+           </button>
+           <button class="btn-ghost large-btn text-danger" @click="logDeviation(activeUnconfirmed, prompt('What did you do instead?', '') || 'Unknown Deviation')">
+             NO, I WAS DISTRACTED ✕
+           </button>
+           <button class="btn-ghost large-btn" style="border-color: #38bdf8; color: #38bdf8;" @click="startRewrite(activeUnconfirmed)">
+             REWRITE REALITY ✎
+           </button>
+        </div>
+
+        <!-- Rewrite Form -->
+        <div v-else class="rewrite-form">
+          <p style="margin-bottom: 15px; color: var(--primary-2); font-weight: 700;">Overwrite plan with what actually happened:</p>
+          <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <input v-model="rewriteForm.title" class="terminal-input" style="flex: 2; padding: 10px;" placeholder="Actual activity (e.g. Slept in, Talked with friend)" />
+            <select v-model="rewriteForm.lifeArea" class="terminal-input" style="flex: 1; padding: 10px;">
+              <option v-for="area in ['LEARNING','HEALTH','WORK','CREATIVITY','SOCIAL','MINDFULNESS','FINANCE']" :key="area" :value="area">{{ area }}</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; justify-content: center; margin-bottom: 20px;">
+            <span>Actual Duration:</span>
+            <input type="number" v-model.number="rewriteForm.durationMins" class="terminal-input" style="width: 80px; padding: 5px; text-align: center;" />
+            <span>mins</span>
+          </div>
+          <div class="mission-actions">
+            <button class="btn-ghost large-btn text-muted" @click="isRewriting = false">CANCEL</button>
+            <button class="primary action-btn large-btn" :disabled="!rewriteForm.title.trim()" @click="submitRewrite(activeUnconfirmed)">OVERWRITE HISTORY</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Current Active Mission -->
+      <div v-else-if="currentMission" class="active-mission">
         <div class="mission-status pulse-text">● ACTIVE MISSION DETECTED</div>
         <h1 class="mission-title">{{ currentMission.title }}</h1>
         <div class="mission-meta">
@@ -246,12 +407,12 @@ onUnmounted(() => clearInterval(ticker));
             <div v-if="recentActions.length === 0" class="log-item empty-log" key="empty">
               System standing by. Awaiting commands.
             </div>
-            <div v-for="action in recentActions" :key="action.id" class="log-item">
+            <div v-for="action in recentActions" :key="action.id" class="log-item" :class="{'damage-item': action.xp < 0}">
                <div class="log-content">
-                  <span class="log-type" :class="{'text-warn': action.type === 'Deviation'}">[{{ action.type }}]</span>
+                  <span class="log-type" :class="{'text-warn': action.type === 'Deviation' || action.xp < 0}">[{{ action.type }}]</span>
                   <span class="log-text">{{ action.text }}</span>
                </div>
-               <span class="xp-gain">+{{ action.xp }} XP</span>
+               <span class="xp-gain" :class="{'text-danger': action.xp < 0}">{{ action.xp > 0 ? '+' : '' }}{{ action.xp }} XP</span>
             </div>
           </transition-group>
         </div>
@@ -260,9 +421,39 @@ onUnmounted(() => clearInterval(ticker));
       <!-- Right: Side Quests -->
       <aside class="quests-panel">
         
-        <!-- Deviations Quick Panel -->
-        <div class="panel glass">
-          <h2 class="section-title">Quick Confessions (Deviations)</h2>
+        <!-- Morning Protocol (Wake Up Tracker) -->
+        <div class="panel glass" v-if="!wakeupLogged">
+          <h2 class="section-title" style="color: #34d399;">🌅 Morning Protocol</h2>
+          <p class="muted-text mb-2">When did you wake up today?</p>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="time" v-model="wakeupTime" class="terminal-input" style="padding: 10px; font-size: 1.1rem; flex: 1;" />
+            <button class="primary action-btn" @click="logWakeup" style="padding: 10px 16px;">LOG TIME</button>
+          </div>
+        </div>
+        <div class="panel glass" v-else>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span class="muted-text" style="font-weight: 700;">🌅 WOKE UP AT:</span>
+            <span style="font-size: 1.2rem; font-weight: 800; color: #34d399;">{{ wakeupTime }}</span>
+          </div>
+        </div>
+
+        <!-- Vice Confession Console -->
+        <div class="panel glass mt-4" style="border-color: rgba(248,113,113,0.3);">
+          <h2 class="section-title text-danger">⚠️ Confess a Vice</h2>
+          <p class="muted-text mb-2">Did a bad habit? Log it and take the HP hit.</p>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <input v-model="viceName" class="terminal-input" placeholder="What did you do? (e.g. Doomscrolling)" style="padding: 10px;" />
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="number" v-model.number="viceDuration" class="terminal-input" placeholder="Mins" style="width: 80px; padding: 10px;" />
+              <span class="text-muted">minutes wasted</span>
+            </div>
+            <button class="btn-ghost text-danger" style="padding: 10px; border-color: #f87171; font-weight: 800;" @click="confessVice">CONFESS (-HP)</button>
+          </div>
+        </div>
+
+        <!-- Quick Deviations -->
+        <div class="panel glass mt-4">
+          <h2 class="section-title">Quick Actions</h2>
           <p class="muted-text mb-2">If you aren't following the plan, own it.</p>
           <div class="action-grid">
              <button class="quick-action-btn secondary" @click="submit('Did not follow the plan, procrastinated.', 5, 'Deviation')">
@@ -638,6 +829,22 @@ onUnmounted(() => clearInterval(ticker));
   font-weight: 800;
   font-family: 'Outfit', sans-serif;
   text-shadow: 0 0 5px rgba(245, 166, 35, 0.3);
+}
+
+.damage-item {
+  border-left-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.05) !important;
+}
+
+@keyframes damageFlash {
+  0% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+  50% { box-shadow: 0 0 40px rgba(239, 68, 68, 1); }
+  100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+}
+
+.damage-flash {
+  animation: damageFlash 1.5s infinite;
+  background: linear-gradient(135deg, #7f1d1d, #ef4444, #fca5a5);
 }
 
 /* Transitions for battle log */

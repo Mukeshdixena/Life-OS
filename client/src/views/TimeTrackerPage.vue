@@ -61,15 +61,19 @@ const TOTAL_H    = 24 * 60 * PX_PER_MIN; // total height in px
 function blockStyle(b: TimeBlock) {
   const top  = b.startMinutes * PX_PER_MIN;
   const h    = Math.max(b.durationMins * PX_PER_MIN, 22);
-  const color = AREA_COLORS[b.lifeArea] ?? '#7c6df5';
+  const isDeviation = b.note?.startsWith('Deviation:');
+  const color = isDeviation ? '#ef4444' : (AREA_COLORS[b.lifeArea] ?? '#7c6df5');
+  
   return {
     top: `${top}px`,
     height: `${h}px`,
     background: b.completedAt
       ? `repeating-linear-gradient(45deg,${color}33,${color}33 4px,${color}18 4px,${color}18 8px)`
+      : isDeviation
+      ? `linear-gradient(135deg,${color}44,${color}22)`
       : `linear-gradient(135deg,${color}cc,${color}88)`,
     borderLeft: `3px solid ${color}`,
-    opacity: b.completedAt ? '0.65' : '1',
+    opacity: (b.completedAt || isDeviation) ? '0.65' : '1',
   };
 }
 
@@ -362,10 +366,16 @@ onUnmounted(() => clearInterval(ticker));
           @click.stop
         >
           <div class="block-inner">
-            <div class="block-title" :class="{ done: b.completedAt }">{{ b.title }}</div>
+            <div class="block-title" :class="{ done: b.completedAt, 'text-danger': b.note?.startsWith('Deviation:') }">
+               {{ b.title }} 
+               <span v-if="b.note?.startsWith('Deviation:')" style="font-size: 0.6rem; background: #ef4444; color: white; padding: 2px 4px; border-radius: 4px; margin-left: 4px;">DEVIATION</span>
+            </div>
             <div class="block-meta">
               {{ minToHHMM(b.startMinutes) }} · {{ b.durationMins }}m ·
               <span class="block-area">{{ b.lifeArea }}</span>
+            </div>
+            <div v-if="b.note?.startsWith('Deviation:')" style="font-size: 0.65rem; color: #fca5a5; margin-top: 4px; white-space: normal; line-height: 1.2;">
+              ↳ {{ b.note.replace('Deviation: ', '') }}
             </div>
           </div>
           <div class="block-actions">
