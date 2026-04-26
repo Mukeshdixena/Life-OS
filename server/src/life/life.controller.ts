@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { GuruDto, InputDto } from './dto';
+import { GuruDto, InputDto, TimeBlockDto } from './dto';
 import { LifeService } from './life.service';
 
 type RequestWithUser = { user: { id: string; email: string } };
@@ -74,4 +74,36 @@ export class LifeController {
   guru(@Req() req: RequestWithUser, @Body() dto: GuruDto) {
     return this.life.guru(req.user.id, dto);
   }
+
+  // ── Time Blocks ──────────────────────────────────────────────────────────
+
+  @Get('timeblocks')
+  timeBlocks(@Req() req: RequestWithUser, @Query('date') date?: string) {
+    return this.life.getTimeBlocks(req.user.id, date);
+  }
+
+  @Post('timeblocks')
+  createTimeBlock(@Req() req: RequestWithUser, @Body() dto: TimeBlockDto) {
+    return this.life.createTimeBlock(req.user.id, dto);
+  }
+
+  @Patch('timeblocks/:id')
+  updateTimeBlock(
+    @Req() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() dto: Partial<TimeBlockDto>,
+  ) {
+    return this.life.updateTimeBlock(req.user.id, id, dto);
+  }
+
+  @Delete('timeblocks/:id')
+  deleteTimeBlock(@Req() req: RequestWithUser, @Param('id') id: string) {
+    return this.life.deleteTimeBlock(req.user.id, id);
+  }
+
+  @Patch('timeblocks/:id/done')
+  doneTimeBlock(@Req() req: RequestWithUser, @Param('id') id: string) {
+    return this.life.doneTimeBlock(req.user.id, id);
+  }
 }
+

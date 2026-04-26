@@ -16,6 +16,7 @@ function logout() {
 const navItems = [
   { to: '/',          icon: '✦',  label: 'Input'    },
   { to: '/today',     icon: '☀',  label: 'Today'    },
+  { to: '/time',      icon: '⏱',  label: 'Time'     },
   { to: '/projects',  icon: '◈',  label: 'Projects' },
   { to: '/habits',    icon: '⟳',  label: 'Habits'   },
   { to: '/progress',  icon: '◉',  label: 'Progress' },

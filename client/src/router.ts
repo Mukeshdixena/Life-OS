@@ -10,6 +10,7 @@ import ProgressPage from './views/ProgressPage.vue';
 import ProjectsPage from './views/ProjectsPage.vue';
 import ReportsPage from './views/ReportsPage.vue';
 import TodayPage from './views/TodayPage.vue';
+import TimeTrackerPage from './views/TimeTrackerPage.vue';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -17,6 +18,7 @@ export const router = createRouter({
     { path: '/auth', component: AuthPage },
     { path: '/', component: InputPage },
     { path: '/today', component: TodayPage },
+    { path: '/time', component: TimeTrackerPage },
     { path: '/projects', component: ProjectsPage },
     { path: '/habits', component: HabitsPage },
     { path: '/progress', component: ProgressPage },

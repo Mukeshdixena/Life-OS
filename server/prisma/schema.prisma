@@ -37,6 +37,7 @@ model User {
   diary        DiaryEntry[]
   daily        DailySummary[]
   guru         GuruMessage[]
+  timeBlocks   TimeBlock[]
 }
 
 model InputEntry {
@@ -105,6 +106,21 @@ model WorkSession {
   note      String?
   createdAt DateTime @default(now())
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model TimeBlock {
+  id           String    @id @default(cuid())
+  userId       String
+  title        String
+  lifeArea     LifeArea  @default(WORK)
+  date         DateTime
+  startMinutes Int       // minutes from midnight (0-1439)
+  durationMins Int       @default(60)
+  taskId       String?
+  completedAt  DateTime?
+  note         String?
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ProgressLog {

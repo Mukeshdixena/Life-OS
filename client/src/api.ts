@@ -25,6 +25,19 @@ export type Project = {
   sessions: Array<{ id: string; minutes: number; note?: string; createdAt: string }>;
 };
 
+export type TimeBlock = {
+  id: string;
+  title: string;
+  lifeArea: LifeArea;
+  date: string;
+  startMinutes: number;
+  durationMins: number;
+  taskId?: string | null;
+  completedAt?: string | null;
+  note?: string | null;
+  createdAt: string;
+};
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('life-os-token');
   const response = await fetch(`${API_URL}${path}`, {
@@ -43,4 +56,3 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   return response.json() as Promise<T>;
 }
-

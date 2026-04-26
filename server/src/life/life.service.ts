@@ -3,7 +3,7 @@ import { LifeArea } from '@prisma/client';
 import { endOfMonth, startOfDay, startOfMonth, subDays } from 'date-fns';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiRouterService } from './ai-router.service';
-import { GuruDto, InputDto } from './dto';
+import { GuruDto, InputDto, TimeBlockDto } from './dto';
 
 @Injectable()
 export class LifeService {
@@ -108,25 +108,14 @@ export class LifeService {
           })
         : null;
 
-      // Fetch current productivity then cap at 100
       const existing = await tx.dailySummary.findUnique({ where: { userId_date: { userId, date: today } } });
       const currentProd = existing?.productivity ?? 0;
       const newProd = Math.min(100, currentProd + Math.round(meaning.productivity / 5));
 
       await tx.dailySummary.upsert({
         where: { userId_date: { userId, date: today } },
-        update: {
-          productivity: newProd,
-          summary: meaning.summary,
-          areas: meaning.areas,
-        },
-        create: {
-          userId,
-          date: today,
-          productivity: Math.min(100, meaning.productivity),
-          summary: meaning.summary,
-          areas: meaning.areas,
-        },
+        update: { productivity: newProd, summary: meaning.summary, areas: meaning.areas },
+        create: { userId, date: today, productivity: Math.min(100, meaning.productivity), summary: meaning.summary, areas: meaning.areas },
       });
 
       return { entry, meaning, created: { tasks, habits, projects, diary } };
@@ -138,10 +127,7 @@ export class LifeService {
   today(userId: string) {
     const tomorrow = new Date(startOfDay(new Date()).getTime() + 24 * 60 * 60 * 1000);
     return this.prisma.task.findMany({
-      where: {
-        userId,
-        OR: [{ dueDate: null }, { dueDate: { lt: tomorrow } }],
-      },
+      where: { userId, OR: [{ dueDate: null }, { dueDate: { lt: tomorrow } }] },
       orderBy: [{ completedAt: 'asc' }, { importance: 'desc' }, { createdAt: 'desc' }],
     });
   }
@@ -185,7 +171,6 @@ export class LifeService {
   calendar(userId: string, month?: string) {
     let base = new Date();
     if (month) {
-      // month is 'YYYY-MM'
       const [y, m] = month.split('-').map(Number);
       base = new Date(y, m - 1, 1);
     }
@@ -196,11 +181,7 @@ export class LifeService {
   }
 
   diary(userId: string) {
-    return this.prisma.diaryEntry.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 60,
-    });
+    return this.prisma.diaryEntry.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 60 });
   }
 
   async reports(userId: string, days = 7) {
@@ -211,11 +192,10 @@ export class LifeService {
       this.prisma.progressLog.groupBy({ by: ['lifeArea'], where: { userId, createdAt: { gte: since } }, _sum: { points: true } }),
       this.prisma.diaryEntry.findMany({ where: { userId, createdAt: { gte: since } } }),
     ]);
-
-    const completed = tasks.filter((task) => task.completedAt).length;
+    const completed = tasks.filter((t) => t.completedAt).length;
     return {
       taskCompletion: tasks.length ? Math.round((completed / tasks.length) * 100) : 0,
-      habitConsistency: habitLogs.length ? Math.round((habitLogs.filter((log) => log.completed).length / habitLogs.length) * 100) : 0,
+      habitConsistency: habitLogs.length ? Math.round((habitLogs.filter((l) => l.completed).length / habitLogs.length) * 100) : 0,
       strongestArea: progress.sort((a, b) => (b._sum.points ?? 0) - (a._sum.points ?? 0))[0]?.lifeArea ?? null,
       reflectionCount: diary.length,
       progress,
@@ -225,18 +205,11 @@ export class LifeService {
   async toggleHabit(userId: string, habitId: string) {
     const habit = await this.prisma.habit.findFirstOrThrow({ where: { id: habitId, userId } });
     const today = startOfDay(new Date());
-    const existing = await this.prisma.habitLog.findUnique({
-      where: { habitId_date: { habitId: habit.id, date: today } },
-    });
+    const existing = await this.prisma.habitLog.findUnique({ where: { habitId_date: { habitId: habit.id, date: today } } });
     if (existing) {
-      return this.prisma.habitLog.update({
-        where: { id: existing.id },
-        data: { completed: !existing.completed },
-      });
+      return this.prisma.habitLog.update({ where: { id: existing.id }, data: { completed: !existing.completed } });
     }
-    return this.prisma.habitLog.create({
-      data: { habitId: habit.id, date: today, completed: true },
-    });
+    return this.prisma.habitLog.create({ data: { habitId: habit.id, date: today, completed: true } });
   }
 
   async guru(userId: string, dto: GuruDto) {
@@ -248,6 +221,63 @@ export class LifeService {
 
   guruMessages(userId: string) {
     return this.prisma.guruMessage.findMany({ where: { userId }, orderBy: { createdAt: 'asc' }, take: 100 });
+  }
+
+  // ── Time Blocks ────────────────────────────────────────────────────────────
+
+  getTimeBlocks(userId: string, dateStr?: string) {
+    const date = dateStr ? new Date(dateStr) : new Date();
+    const dayStart = startOfDay(date);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    return this.prisma.timeBlock.findMany({
+      where: { userId, date: { gte: dayStart, lt: dayEnd } },
+      orderBy: { startMinutes: 'asc' },
+    });
+  }
+
+  createTimeBlock(userId: string, dto: TimeBlockDto) {
+    const [y, m, d] = dto.date.split('-').map(Number);
+    const date = startOfDay(new Date(y, m - 1, d));
+    return this.prisma.timeBlock.create({
+      data: {
+        userId,
+        title: dto.title,
+        lifeArea: dto.lifeArea as LifeArea,
+        date,
+        startMinutes: dto.startMinutes,
+        durationMins: dto.durationMins,
+        taskId: dto.taskId ?? null,
+        note: dto.note ?? null,
+      },
+    });
+  }
+
+  async updateTimeBlock(userId: string, id: string, dto: Partial<TimeBlockDto>) {
+    await this.prisma.timeBlock.findFirstOrThrow({ where: { id, userId } });
+    const data: Record<string, unknown> = {};
+    if (dto.title !== undefined) data.title = dto.title;
+    if (dto.lifeArea !== undefined) data.lifeArea = dto.lifeArea as LifeArea;
+    if (dto.startMinutes !== undefined) data.startMinutes = dto.startMinutes;
+    if (dto.durationMins !== undefined) data.durationMins = dto.durationMins;
+    if (dto.taskId !== undefined) data.taskId = dto.taskId;
+    if (dto.note !== undefined) data.note = dto.note;
+    return this.prisma.timeBlock.update({ where: { id }, data });
+  }
+
+  async deleteTimeBlock(userId: string, id: string) {
+    await this.prisma.timeBlock.findFirstOrThrow({ where: { id, userId } });
+    return this.prisma.timeBlock.delete({ where: { id } });
+  }
+
+  async doneTimeBlock(userId: string, id: string) {
+    const block = await this.prisma.timeBlock.findFirstOrThrow({ where: { id, userId } });
+    const now = new Date();
+    const completedAt = block.completedAt ? null : now;
+    const updated = await this.prisma.timeBlock.update({ where: { id }, data: { completedAt } });
+    if (block.taskId && completedAt) {
+      await this.prisma.task.updateMany({ where: { id: block.taskId, userId }, data: { completedAt: now } });
+    }
+    return updated;
   }
 
   private async guruContext(userId: string) {
