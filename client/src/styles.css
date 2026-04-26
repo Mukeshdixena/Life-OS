@@ -302,6 +302,7 @@ textarea { resize: vertical; min-height: 180px; }
 /* ── RANGE ── */
 .range-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 input[type="range"] {
+  appearance: none;
   -webkit-appearance: none;
   width: 100%;
   height: 4px;
@@ -466,7 +467,7 @@ input[type="checkbox"] {
 .day-cell.today { border-color: var(--primary) !important; box-shadow: 0 0 12px var(--primary-glow); }
 .day-num { font-weight: 700; font-size: 0.85rem; color: var(--ink-2); }
 .day-prod { font-family: 'Outfit', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--primary-2); }
-.day-summary { font-size: 0.68rem; color: var(--muted); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.day-summary { font-size: 0.68rem; color: var(--muted); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
 .day-dots { display: flex; flex-wrap: wrap; gap: 3px; margin-top: auto; }
 .day-dots span { width: 6px; height: 6px; border-radius: 50%; }
 

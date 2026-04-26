@@ -170,6 +170,11 @@ async function submitRewrite(block: TimeBlock) {
   }
 }
 
+function promptDeviation(block: TimeBlock) {
+  const reason = window.prompt('What did you do instead?', '');
+  logDeviation(block, reason || 'Unknown Deviation');
+}
+
 async function quickCompleteTask(task: Task) {
   completedTaskIds.value.add(task.id);
   await submit(`Completed task: ${task.title}`, 50, 'Quest Complete');
@@ -253,7 +258,7 @@ onUnmounted(() => clearInterval(ticker));
     <div class="player-hud panel glass">
       <div class="avatar-section">
         <div class="avatar-ring" :class="{'damage-flash': mood < 5}">
-          <img :src="'/life_os_avatar.png'" alt="Avatar" class="avatar-img" @error="$event.target.src='https://api.dicebear.com/7.x/bottts/svg?seed=LifeOS&backgroundColor=13161e'" />
+          <img :src="'/life_os_avatar.png'" alt="Avatar" class="avatar-img" @error="($event.target as HTMLImageElement).src='https://api.dicebear.com/7.x/bottts/svg?seed=LifeOS&backgroundColor=13161e'" />
         </div>
         <div class="player-info">
           <h2>Hero</h2>
@@ -315,7 +320,7 @@ onUnmounted(() => clearInterval(ticker));
            <button class="primary action-btn large-btn" @click="markMissionDone(activeUnconfirmed)">
              YES, I COMPLETED IT ✓
            </button>
-           <button class="btn-ghost large-btn text-danger" @click="logDeviation(activeUnconfirmed, prompt('What did you do instead?', '') || 'Unknown Deviation')">
+           <button class="btn-ghost large-btn text-danger" @click="promptDeviation(activeUnconfirmed)">
              NO, I WAS DISTRACTED ✕
            </button>
            <button class="btn-ghost large-btn" style="border-color: #38bdf8; color: #38bdf8;" @click="startRewrite(activeUnconfirmed)">
@@ -646,6 +651,7 @@ onUnmounted(() => clearInterval(ticker));
   margin: 0 0 16px 0;
   background: linear-gradient(120deg, #fff 40%, var(--primary-2));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   text-shadow: 0 0 20px rgba(124,109,245,0.3);
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { api, Task, TimeBlock } from '../api';
+import { api, Task, TimeBlock, Routine } from '../api';
 
 // ── State ──────────────────────────────────────────────────────────────────
 const blocks = ref<TimeBlock[]>([]);
@@ -141,6 +141,13 @@ async function saveCurrentAsRoutine(name: string) {
     alert(`Successfully saved as "${name}"`);
   } catch (e: any) {
     error.value = e.message;
+  }
+}
+
+function promptSaveRoutine() {
+  const name = window.prompt('Routine Name?', 'My Routine');
+  if (name) {
+    saveCurrentAsRoutine(name);
   }
 }
 
@@ -314,7 +321,7 @@ onUnmounted(() => clearInterval(ticker));
         <button 
           class="btn-ghost-small" 
           style="border-style: dashed; margin-left: 4px;"
-          @click="saveCurrentAsRoutine(prompt('Routine Name?','My Routine') || '')"
+          @click="promptSaveRoutine"
         >＋ Save Current</button>
       </div>
     </div>
