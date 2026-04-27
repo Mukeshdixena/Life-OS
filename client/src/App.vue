@@ -11,6 +11,14 @@ let toastId = 0;
 
 const hideSidebar = computed(() => !!(route.meta as Record<string, unknown>).hideSidebar);
 
+// ── Theme ───────────────────────────────────────────────────────────────────
+const theme = ref(localStorage.getItem('life-os-theme') || 'dark');
+function toggleTheme() {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('life-os-theme', theme.value);
+  document.documentElement.setAttribute('data-theme', theme.value);
+}
+
 // ── Behavior Trigger ────────────────────────────────────────────────────────
 const triggerTime = ref<string | null>(null);
 const showTrigger = ref(false);
@@ -43,7 +51,11 @@ function goFocus() {
 }
 
 let triggerInterval: ReturnType<typeof setInterval> | null = null;
-onMounted(() => { checkTrigger(); triggerInterval = setInterval(checkTrigger, 30_000); });
+onMounted(() => {
+  document.documentElement.setAttribute('data-theme', theme.value);
+  checkTrigger(); 
+  triggerInterval = setInterval(checkTrigger, 30_000); 
+});
 onUnmounted(() => { if (triggerInterval) clearInterval(triggerInterval); });
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -85,7 +97,10 @@ const navItems = [
           <span class="nav-label">{{ item.label }}</span>
         </RouterLink>
       </nav>
-      <button class="ghost" type="button" @click="logout">
+      <button class="ghost" type="button" @click="toggleTheme" style="margin-top: auto; margin-bottom: 8px;">
+        <span>{{ theme === 'dark' ? '☀' : '🌙' }}</span> {{ theme === 'dark' ? 'Light Mode' : 'Dark Mode' }}
+      </button>
+      <button class="ghost" type="button" @click="logout" style="margin-top: 0;">
         <span>⎋</span> Sign out
       </button>
     </aside>
@@ -108,9 +123,9 @@ const navItems = [
         <span class="trigger-icon">⏰</span>
         <div class="trigger-body">
           <strong>It's {{ fmtTriggerTime(triggerTime!) }} — time to focus</strong>
-          <span>Your scheduled focus session is starting now</span>
+          <span>Your next scheduled activity is starting.</span>
         </div>
-        <button class="primary trigger-cta" @click="goFocus">Start Session →</button>
+        <button class="primary trigger-cta" @click="goFocus">Let's Go →</button>
         <button class="trigger-dismiss" @click="dismissTrigger">✕</button>
       </div>
     </Transition>

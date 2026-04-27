@@ -74,17 +74,17 @@ onMounted(async () => { rows.value = await api<Array<{ area: LifeArea; points: n
           :key="r"
           :points="Array.from({length:N},(_,i)=>outerPt(i,r)).map(p=>`${p.x},${p.y}`).join(' ')"
           fill="none"
-          stroke="rgba(255,255,255,0.06)"
+          stroke="var(--line)"
           stroke-width="1"
         />
         <!-- Spokes -->
         <line
           v-for="(s,i) in spokes" :key="i"
           :x1="CENTER" :y1="CENTER" :x2="s.x2" :y2="s.y2"
-          stroke="rgba(255,255,255,0.08)" stroke-width="1"
+          stroke="var(--line)" stroke-width="1"
         />
         <!-- Data shape -->
-        <path :d="radarPath" fill="rgba(124,109,245,0.25)" stroke="rgba(124,109,245,0.7)" stroke-width="2" />
+        <path :d="radarPath" fill="var(--primary-glow)" stroke="var(--primary)" stroke-width="2" />
         <!-- Area labels -->
         <text
           v-for="(r,i) in rows" :key="r.area"
@@ -93,7 +93,7 @@ onMounted(async () => { rows.value = await api<Array<{ area: LifeArea; points: n
           text-anchor="middle"
           dominant-baseline="middle"
           font-size="11"
-          fill="rgba(255,255,255,0.5)"
+          fill="var(--muted)"
         >{{ areaConfig[r.area]?.label ?? r.area }}</text>
       </svg>
     </div>
@@ -133,5 +133,5 @@ onMounted(async () => { rows.value = await api<Array<{ area: LifeArea; points: n
 }
 .area-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .area-right strong { font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; }
-.level-chip { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
+.level-chip { font-size: 0.68rem; font-weight: 700;  }
 </style>

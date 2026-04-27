@@ -104,6 +104,6 @@ onMounted(async () => { projects.value = await api<Project[]>('/life/projects');
 .level-pts { font-size: 0.78rem; margin-left: auto; }
 .project-stats { display: flex; gap: 20px; }
 .pstat { display: flex; flex-direction: column; gap: 2px; }
-.pstat span { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.pstat span { font-size: 0.72rem; font-weight: 600;  letter-spacing: 0.05em; }
 .pstat strong { font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; }
 </style>

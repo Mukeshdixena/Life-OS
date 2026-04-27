@@ -306,33 +306,33 @@ onUnmounted(() => clearInterval(ticker));
       
       <!-- Unconfirmed Past Mission (Highest Priority to Clear) -->
       <div v-if="activeUnconfirmed" class="active-mission unconfirmed-report">
-        <div class="mission-status pulse-text text-warn">⚠️ AFTER ACTION REPORT REQUIRED</div>
-        <p class="mission-prompt">You had a scheduled mission in the past that was not confirmed.</p>
+        <div class="mission-status pulse-text text-warn">⚠️ ACTIVITY REVIEW</div>
+        <p class="mission-prompt">Please confirm if you completed your previous activity.</p>
         <h1 class="mission-title">{{ activeUnconfirmed.title }}</h1>
         <div class="mission-meta">
           <span>⏰ {{ formatTime(activeUnconfirmed.startMinutes) }} - {{ formatTime(activeUnconfirmed.startMinutes + activeUnconfirmed.durationMins) }}</span>
           <span class="badge" :class="'badge-' + activeUnconfirmed.lifeArea.toLowerCase()">{{ activeUnconfirmed.lifeArea }}</span>
         </div>
         
-        <div v-if="!isRewriting" class="mission-prompt">Did you actually do this as planned?</div>
+        <div v-if="!isRewriting" class="mission-prompt">Did you complete this as planned?</div>
         
         <div v-if="!isRewriting" class="mission-actions" style="flex-wrap: wrap;">
            <button class="primary action-btn large-btn" @click="markMissionDone(activeUnconfirmed)">
-             YES, I COMPLETED IT ✓
+             Yes, Completed
            </button>
            <button class="btn-ghost large-btn text-danger" @click="promptDeviation(activeUnconfirmed)">
-             NO, I WAS DISTRACTED ✕
+             No, Got Distracted
            </button>
            <button class="btn-ghost large-btn" style="border-color: #38bdf8; color: #38bdf8;" @click="startRewrite(activeUnconfirmed)">
-             REWRITE REALITY ✎
+             Edit Activity
            </button>
         </div>
 
         <!-- Rewrite Form -->
         <div v-else class="rewrite-form">
-          <p style="margin-bottom: 15px; color: var(--primary-2); font-weight: 700;">Overwrite plan with what actually happened:</p>
+          <p style="margin-bottom: 15px; color: var(--primary-2); font-weight: 700;">Update with what you actually did?</p>
           <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-            <input v-model="rewriteForm.title" class="terminal-input" style="flex: 2; padding: 10px;" placeholder="Actual activity (e.g. Slept in, Talked with friend)" />
+            <input v-model="rewriteForm.title" class="terminal-input" style="flex: 2; padding: 10px;" placeholder="What did you actually do?" />
             <select v-model="rewriteForm.lifeArea" class="terminal-input" style="flex: 1; padding: 10px;">
               <option v-for="area in ['LEARNING','HEALTH','WORK','CREATIVITY','SOCIAL','MINDFULNESS','FINANCE']" :key="area" :value="area">{{ area }}</option>
             </select>
@@ -344,34 +344,34 @@ onUnmounted(() => clearInterval(ticker));
           </div>
           <div class="mission-actions">
             <button class="btn-ghost large-btn text-muted" @click="isRewriting = false">CANCEL</button>
-            <button class="primary action-btn large-btn" :disabled="!rewriteForm.title.trim()" @click="submitRewrite(activeUnconfirmed)">OVERWRITE HISTORY</button>
+            <button class="primary action-btn large-btn" :disabled="!rewriteForm.title.trim()" @click="submitRewrite(activeUnconfirmed)">Save Changes</button>
           </div>
         </div>
       </div>
 
       <!-- Current Active Mission -->
       <div v-else-if="currentMission" class="active-mission">
-        <div class="mission-status pulse-text">● ACTIVE MISSION DETECTED</div>
+        <div class="mission-status pulse-text">● CURRENT ACTIVITY</div>
         <h1 class="mission-title">{{ currentMission.title }}</h1>
         <div class="mission-meta">
           <span>⏰ {{ formatTime(currentMission.startMinutes) }} - {{ formatTime(currentMission.startMinutes + currentMission.durationMins) }}</span>
           <span class="badge" :class="'badge-' + currentMission.lifeArea.toLowerCase()">{{ currentMission.lifeArea }}</span>
         </div>
         
-        <div class="mission-prompt">Are you focused on this mission right now?</div>
+        <div class="mission-prompt">Are you currently working on this?</div>
         <div class="mission-actions">
            <button class="primary action-btn large-btn" :disabled="!!currentMission.completedAt" @click="markMissionDone(currentMission)">
-             {{ currentMission.completedAt ? 'MISSION ACCOMPLISHED' : 'YES, ON IT & DONE ✓' }}
+             {{ currentMission.completedAt ? 'MISSION ACCOMPLISHED' : 'Complete Activity' }}
            </button>
            <button class="btn-ghost large-btn text-danger" @click="text = `Deviation: I am not doing [${currentMission.title}]. Instead I am... `">
-             NO, I AM DEVIATING
+             Log Something Else
            </button>
         </div>
       </div>
       <div v-else class="free-time">
-        <div class="mission-status text-muted">○ NO ACTIVE MISSION</div>
-        <h1 class="mission-title text-muted">Free Roam Mode</h1>
-        <p class="mission-prompt text-muted" style="margin-top: 10px;">You have no scheduled blocks at this time. <router-link to="/time" style="color:var(--primary-2); text-decoration: underline;">Plan your day</router-link> or log what you're doing below.</p>
+        <div class="mission-status text-muted">○ UNSCHEDULED TIME</div>
+        <h1 class="mission-title text-muted">Free Time</h1>
+        <p class="mission-prompt text-muted" style="margin-top: 10px;">You don't have anything scheduled right now. <router-link to="/time" style="color:var(--primary-2); text-decoration: underline;">Plan your day</router-link> or log what you're doing below.</p>
         
         <div v-if="nextMission" class="next-mission-hint">
            Next up: <strong>{{ nextMission.title }}</strong> at {{ formatTime(nextMission.startMinutes) }}
@@ -385,7 +385,7 @@ onUnmounted(() => clearInterval(ticker));
       <div class="omni-console panel glass">
         <div class="console-header">
           <span class="pulse-dot"></span>
-          <span>Omni-Action Console</span>
+          <span>Activity Log</span>
         </div>
         
         <form class="console-body" @submit.prevent="submit()">
@@ -393,14 +393,14 @@ onUnmounted(() => clearInterval(ticker));
             v-model="text"
             class="terminal-input"
             rows="4"
-            placeholder="> Declare your current action, record a thought, or confess a deviation..."
+            placeholder="What are you working on right now?"
             @keydown="handleKeydown"
           />
           
           <div class="console-actions">
              <div class="hint">{{ charCount > 0 ? charCount + ' chars' : '⌘ + Enter to execute' }}</div>
              <button class="primary action-btn" type="submit" :disabled="loading || !text.trim()">
-               {{ loading ? 'Processing...' : 'Execute Action' }}
+               {{ loading ? 'Processing...' : 'Save' }}
              </button>
           </div>
         </form>
@@ -410,7 +410,7 @@ onUnmounted(() => clearInterval(ticker));
           <div class="log-header">Recent Activity Feed</div>
           <transition-group name="list" tag="div" class="log-list">
             <div v-if="recentActions.length === 0" class="log-item empty-log" key="empty">
-              System standing by. Awaiting commands.
+              Ready when you are.
             </div>
             <div v-for="action in recentActions" :key="action.id" class="log-item" :class="{'damage-item': action.xp < 0}">
                <div class="log-content">
@@ -444,22 +444,22 @@ onUnmounted(() => clearInterval(ticker));
 
         <!-- Vice Confession Console -->
         <div class="panel glass mt-4" style="border-color: rgba(248,113,113,0.3);">
-          <h2 class="section-title text-danger">⚠️ Confess a Vice</h2>
-          <p class="muted-text mb-2">Did a bad habit? Log it and take the HP hit.</p>
+          <h2 class="section-title text-danger">⚠️ Log a Distraction</h2>
+          <p class="muted-text mb-2">Did you get off track? Log it to stay accountable.</p>
           <div style="display: flex; flex-direction: column; gap: 10px;">
             <input v-model="viceName" class="terminal-input" placeholder="What did you do? (e.g. Doomscrolling)" style="padding: 10px;" />
             <div style="display: flex; gap: 10px; align-items: center;">
               <input type="number" v-model.number="viceDuration" class="terminal-input" placeholder="Mins" style="width: 80px; padding: 10px;" />
               <span class="text-muted">minutes wasted</span>
             </div>
-            <button class="btn-ghost text-danger" style="padding: 10px; border-color: #f87171; font-weight: 800;" @click="confessVice">CONFESS (-HP)</button>
+            <button class="btn-ghost text-danger" style="padding: 10px; border-color: #f87171; font-weight: 800;" @click="confessVice">Log Distraction</button>
           </div>
         </div>
 
         <!-- Quick Deviations -->
         <div class="panel glass mt-4">
-          <h2 class="section-title">Quick Actions</h2>
-          <p class="muted-text mb-2">If you aren't following the plan, own it.</p>
+          <h2 class="section-title">Quick Logs</h2>
+          <p class="muted-text mb-2">Quickly log off-plan activities.</p>
           <div class="action-grid">
              <button class="quick-action-btn secondary" @click="submit('Did not follow the plan, procrastinated.', 5, 'Deviation')">
               🌀 Procrastinated
@@ -477,7 +477,7 @@ onUnmounted(() => clearInterval(ticker));
         </div>
 
         <div class="panel glass mt-4">
-          <h2 class="section-title">Active Quests (Tasks)</h2>
+          <h2 class="section-title">Current Tasks</h2>
           <div class="quest-list">
             <div v-if="!context?.prompts.taskChecks?.length" class="empty-quest">No active quests.</div>
             <button
@@ -489,7 +489,7 @@ onUnmounted(() => clearInterval(ticker));
               <div class="quest-icon">{{ completedTaskIds.has(task.id) ? '🏆' : '📜' }}</div>
               <div class="quest-details">
                 <div class="quest-title">{{ task.title }}</div>
-                <div class="quest-reward">Reward: +50 XP</div>
+                <div class="quest-reward">+50 XP</div>
               </div>
             </button>
           </div>
@@ -509,11 +509,11 @@ onUnmounted(() => clearInterval(ticker));
 }
 
 .glass {
-  background: rgba(20, 24, 36, 0.6);
+  background: var(--glass);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(124, 109, 245, 0.2);
+  border: 1px solid var(--glass-border);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 32px var(--surface-3);
 }
 
 .mt-4 { margin-top: 16px; }
@@ -595,7 +595,7 @@ onUnmounted(() => clearInterval(ticker));
   justify-content: space-between;
   font-size: 0.75rem;
   font-weight: 700;
-  text-transform: uppercase;
+  
   margin-bottom: 4px;
   color: var(--ink-2);
 }
@@ -623,7 +623,7 @@ onUnmounted(() => clearInterval(ticker));
   padding: 30px;
   text-align: center;
   border-top: 4px solid var(--primary-2);
-  background: linear-gradient(to bottom, rgba(124,109,245,0.1), rgba(0,0,0,0.3));
+  background: linear-gradient(to bottom, var(--primary-glow), var(--surface-2));
 }
 
 .mission-status {
@@ -649,11 +649,11 @@ onUnmounted(() => clearInterval(ticker));
   font-size: 2.8rem;
   font-weight: 800;
   margin: 0 0 16px 0;
-  background: linear-gradient(120deg, #fff 40%, var(--primary-2));
+  background: linear-gradient(120deg, var(--ink) 40%, var(--primary-2));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 20px rgba(124,109,245,0.3);
+  text-shadow: 0 0 20px var(--primary-glow);
 }
 
 .mission-meta {
@@ -711,8 +711,8 @@ onUnmounted(() => clearInterval(ticker));
 
 .console-header {
   padding: 12px 20px;
-  background: rgba(0,0,0,0.3);
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -744,26 +744,27 @@ onUnmounted(() => clearInterval(ticker));
 }
 
 .terminal-input {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(124, 109, 245, 0.3);
-  color: #34d399;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 1.05rem;
   padding: 16px;
   border-radius: 8px;
   resize: vertical;
-  box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
 .terminal-input:focus {
   outline: none;
-  border-color: #34d399;
-  box-shadow: inset 0 0 20px rgba(52, 211, 153, 0.1), 0 0 10px rgba(52, 211, 153, 0.2);
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary), 0 0 0 4px var(--primary-glow);
 }
 
 .terminal-input::placeholder {
-  color: rgba(52, 211, 153, 0.4);
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 .console-actions {
@@ -773,14 +774,16 @@ onUnmounted(() => clearInterval(ticker));
 }
 
 .action-btn {
-  background: linear-gradient(135deg, #10b981, #059669);
-  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  box-shadow: 0 4px 15px var(--primary-glow);
   font-family: 'Outfit', sans-serif;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
+  color: white;
+  border: 0;
 }
 .action-btn:hover {
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 6px 20px var(--primary-glow);
+  filter: brightness(1.1);
 }
 
 /* --- BATTLE LOG --- */
@@ -790,7 +793,7 @@ onUnmounted(() => clearInterval(ticker));
 
 .log-header {
   font-size: 0.75rem;
-  text-transform: uppercase;
+  
   color: var(--muted);
   font-weight: 700;
   margin-bottom: 10px;
@@ -809,7 +812,7 @@ onUnmounted(() => clearInterval(ticker));
   justify-content: space-between;
   align-items: center;
   padding: 10px 14px;
-  background: rgba(255,255,255,0.03);
+  background: var(--surface);
   border-radius: 8px;
   border-left: 3px solid var(--primary-2);
   font-size: 0.85rem;
@@ -885,7 +888,7 @@ onUnmounted(() => clearInterval(ticker));
   color: var(--muted);
   padding: 10px;
   text-align: center;
-  background: rgba(0,0,0,0.2);
+  background: var(--surface-2);
   border-radius: 8px;
 }
 
@@ -899,8 +902,8 @@ onUnmounted(() => clearInterval(ticker));
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--surface);
+  border: 1px solid var(--line);
   padding: 12px;
   border-radius: 12px;
   text-align: left;
@@ -920,7 +923,7 @@ onUnmounted(() => clearInterval(ticker));
 .quest-icon {
   font-size: 1.5rem;
   width: 40px; height: 40px;
-  background: rgba(0,0,0,0.3);
+  background: var(--surface-2);
   border-radius: 10px;
   display: flex;
   align-items: center;

@@ -312,7 +312,7 @@ onUnmounted(() => { if (interval) clearInterval(interval); });
   letter-spacing: 0.16em;
   color: var(--muted);
   margin: 0;
-  text-transform: uppercase;
+  
 }
 
 .focus-title {
@@ -334,7 +334,7 @@ onUnmounted(() => { if (interval) clearInterval(interval); });
   border-radius: 999px;
   font-size: 0.7rem;
   font-weight: 700;
-  text-transform: uppercase;
+  
   letter-spacing: 0.08em;
 }
 .imp-pill.high   { background: rgba(248,113,113,0.12); color: var(--danger); }
@@ -365,7 +365,7 @@ onUnmounted(() => { if (interval) clearInterval(interval); });
 .sub-label {
   font-size: 0.7rem;
   font-weight: 700;
-  text-transform: uppercase;
+  
   letter-spacing: 0.1em;
   color: var(--muted);
   margin: 0 0 10px;
@@ -458,7 +458,7 @@ onUnmounted(() => { if (interval) clearInterval(interval); });
 .quick-label {
   font-size: 0.66rem;
   font-weight: 700;
-  text-transform: uppercase;
+  
   letter-spacing: 0.12em;
   color: var(--primary-2);
   margin: 0 0 6px;

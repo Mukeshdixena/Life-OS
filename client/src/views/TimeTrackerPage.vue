@@ -297,7 +297,7 @@ onUnmounted(() => clearInterval(ticker));
         <input 
           v-model="magicPrompt" 
           type="text" 
-          placeholder="Magic plan: 'Fill the rest of my day with work and a walk'..." 
+          placeholder="E.g., 'Plan my afternoon with deep work'..." 
           @keyup.enter="runMagicPlan"
         />
         <button class="magic-btn" :disabled="magicPlanning" @click="runMagicPlan">
@@ -479,17 +479,17 @@ onUnmounted(() => clearInterval(ticker));
 .time-page { max-width: 900px; display: flex; flex-direction: column; gap: 20px; }
 
 .glass {
-  background: rgba(20, 24, 36, 0.6);
+  background: var(--glass);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(124, 109, 245, 0.2);
+  border: 1px solid var(--glass-border);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 32px var(--surface-3);
 }
 
 /* Stats */
 .stats-grid .stat {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 20px;
   transition: transform 0.2s;
@@ -529,22 +529,22 @@ onUnmounted(() => clearInterval(ticker));
 
 /* Magic Planner Bar */
 .magic-planner-bar {
-  background: linear-gradient(135deg, rgba(20, 24, 36, 0.8), rgba(13, 15, 20, 0.9));
-  border: 1px solid rgba(167, 139, 250, 0.3);
+  background: var(--surface-2);
+  border: 1px solid var(--primary-glow);
   border-radius: 12px;
   padding: 14px 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: inset 0 0 20px rgba(167, 139, 250, 0.05);
+  box-shadow: inset 0 0 20px var(--primary-glow);
 }
 
 .magic-input-wrap {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(0,0,0,0.4);
-  border: 1px solid rgba(124,109,245,0.3);
+  background: var(--surface-3);
+  border: 1px solid var(--primary-glow);
   border-radius: 8px;
   padding: 6px 8px 6px 14px;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -577,7 +577,7 @@ onUnmounted(() => clearInterval(ticker));
   cursor: pointer;
   transition: all 0.15s;
   box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
-  text-transform: uppercase;
+  
   letter-spacing: 0.05em;
 }
 .magic-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5); }
@@ -588,10 +588,10 @@ onUnmounted(() => clearInterval(ticker));
   display: flex;
   align-items: center;
   gap: 2px;
-  background: rgba(255,255,255,0.05);
+  background: var(--surface);
   padding: 2px;
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--line);
 }
 .routine-group .btn-ghost-small { border: 0; }
 .btn-icon-tiny {
@@ -599,7 +599,7 @@ onUnmounted(() => clearInterval(ticker));
   padding: 4px; border-radius: 6px; transition: background 0.2s;
 }
 .btn-icon-tiny:hover { background: rgba(255,255,255,0.1); }
-.routine-label { font-size: 0.75rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.routine-label { font-size: 0.75rem; font-weight: 800; color: var(--muted);  letter-spacing: 0.5px; }
 
 .btn-ghost-small {
   background: transparent; border: 1px solid var(--line); color: var(--ink);
@@ -612,14 +612,14 @@ onUnmounted(() => clearInterval(ticker));
   display: flex;
   gap: 0;
   position: relative;
-  border: 1px solid rgba(124,109,245,0.3);
+  border: 1px solid var(--primary-glow);
   border-radius: 16px;
   overflow: hidden;
-  background: rgba(13, 15, 20, 0.8);
+  background: var(--bg-2);
   backdrop-filter: blur(16px);
   max-height: 70vh;
   overflow-y: auto;
-  box-shadow: inset 0 0 50px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.2);
+  box-shadow: inset 0 0 50px var(--surface-3), 0 8px 32px var(--surface-2);
 }
 
 /* Scrollbar specifically for timeline */
@@ -632,8 +632,8 @@ onUnmounted(() => clearInterval(ticker));
   width: 60px;
   flex-shrink: 0;
   position: relative;
-  background: rgba(0,0,0,0.3);
-  border-right: 1px solid rgba(124,109,245,0.2);
+  background: var(--surface-2);
+  border-right: 1px solid var(--primary-glow);
 }
 .hour-label {
   position: absolute;
@@ -745,7 +745,7 @@ onUnmounted(() => clearInterval(ticker));
   font-weight: 600;
   letter-spacing: 0.5px;
 }
-.block-area { font-weight: 800; text-transform: uppercase; background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; }
+.block-area { font-weight: 800;  background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; }
 
 .block-actions {
   display: flex;
@@ -753,7 +753,7 @@ onUnmounted(() => clearInterval(ticker));
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.2s;
-  background: rgba(0,0,0,0.5);
+  background: var(--surface-3);
   padding: 4px;
   border-radius: 8px;
   backdrop-filter: blur(4px);
@@ -789,7 +789,7 @@ onUnmounted(() => clearInterval(ticker));
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 1px;
-  text-transform: uppercase;
+  
   color: var(--primary-2);
   background: rgba(0,0,0,0.6);
   padding: 6px 16px;
@@ -804,7 +804,7 @@ onUnmounted(() => clearInterval(ticker));
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.8);
+  background: var(--surface-3);
   backdrop-filter: blur(8px);
   z-index: 200;
   display: grid;
@@ -828,20 +828,20 @@ onUnmounted(() => clearInterval(ticker));
   border-bottom: 1px solid rgba(124,109,245,0.3);
   background: rgba(124,109,245,0.05);
 }
-.modal-header h2 { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--primary-2); text-transform: uppercase; letter-spacing: 1px; }
+.modal-header h2 { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--primary-2);  letter-spacing: 1px; }
 .modal-body { padding: 22px; display: grid; gap: 16px; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px; }
 
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 .time-inputs { display: flex; align-items: center; gap: 6px; }
-.time-inputs input { width: 64px; text-align: center; font-size: 1rem; font-weight: 700; background: rgba(0,0,0,0.3); }
+.time-inputs input { width: 64px; text-align: center; font-size: 1rem; font-weight: 700; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
 .time-inputs span { color: var(--muted); font-weight: 800; }
 
 select {
   width: 100%;
   border: 1px solid var(--line);
-  background: rgba(0,0,0,0.3);
+  background: var(--surface-2);
   border-radius: 8px;
   padding: 12px;
   color: var(--ink);
@@ -853,7 +853,7 @@ select:focus { border-color: var(--primary); outline: none; }
 .area-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .area-chip {
   border: 1px solid var(--line);
-  background: rgba(0,0,0,0.2);
+  background: var(--surface-2);
   color: var(--muted);
   padding: 6px 14px;
   border-radius: 8px;
