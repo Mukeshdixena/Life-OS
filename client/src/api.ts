@@ -2,6 +2,14 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
 export type LifeArea = 'LEARNING' | 'HEALTH' | 'WORK' | 'CREATIVITY' | 'SOCIAL' | 'MINDFULNESS' | 'FINANCE';
 
+export type Subtask = {
+  id: string;
+  taskId: string;
+  title: string;
+  durationMins: number;
+  completedAt?: string | null;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -9,6 +17,8 @@ export type Task = {
   dueDate?: string | null;
   completedAt?: string | null;
 };
+
+export type FocusTask = Task & { subtasks: Subtask[] };
 
 export type Habit = {
   id: string;

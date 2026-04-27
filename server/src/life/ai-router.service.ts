@@ -280,6 +280,55 @@ export class AiRouterService {
     }
   }
 
+  async splitTask(title: string): Promise<Array<{ title: string; durationMins: number }>> {
+    const apiKey = this.config.get<string>('OPENROUTER_API_KEY');
+    const model = this.config.get<string>('OPENROUTER_MODEL');
+    if (!apiKey || !model) return this.heuristicSplit(title);
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:5173',
+          'X-Title': 'Life OS',
+        },
+        body: JSON.stringify({
+          model,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Break the given task into 3–5 concrete subtasks, each taking at most 10 minutes. Return JSON: { subtasks: [{title, durationMins}] }. durationMins must be between 2 and 10.',
+            },
+            { role: 'user', content: title },
+          ],
+        }),
+      });
+      if (!response.ok) return this.heuristicSplit(title);
+      const json = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const content = json.choices?.[0]?.message?.content;
+      if (!content) return this.heuristicSplit(title);
+      const parsed = JSON.parse(content) as { subtasks?: Array<{ title?: string; durationMins?: number }> };
+      return (parsed.subtasks ?? []).slice(0, 5).map((s) => ({
+        title: String(s.title ?? title).slice(0, 200),
+        durationMins: Math.min(10, Math.max(2, Number(s.durationMins ?? 5))),
+      }));
+    } catch {
+      return this.heuristicSplit(title);
+    }
+  }
+
+  private heuristicSplit(title: string): Array<{ title: string; durationMins: number }> {
+    return [
+      { title: `Research: ${title}`, durationMins: 5 },
+      { title: `Draft / do: ${title}`, durationMins: 10 },
+      { title: `Review: ${title}`, durationMins: 5 },
+    ];
+  }
+
   private localGuruQuestion(message: string) {
     return `When you look at "${message.slice(0, 80)}", what pattern in your recent choices feels most important to understand before you decide what to do next?`;
   }

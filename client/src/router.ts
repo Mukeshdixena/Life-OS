@@ -3,6 +3,7 @@ import { useSessionStore } from './stores/session';
 import AuthPage from './views/AuthPage.vue';
 import CalendarPage from './views/CalendarPage.vue';
 import DiaryPage from './views/DiaryPage.vue';
+import FocusPage from './views/FocusPage.vue';
 import GuruPage from './views/GuruPage.vue';
 import HabitsPage from './views/HabitsPage.vue';
 import InputPage from './views/InputPage.vue';
@@ -18,6 +19,7 @@ export const router = createRouter({
     { path: '/auth', component: AuthPage },
     { path: '/', component: InputPage },
     { path: '/today', component: TodayPage },
+    { path: '/focus', component: FocusPage, meta: { hideSidebar: true } },
     { path: '/time', component: TimeTrackerPage },
     { path: '/projects', component: ProjectsPage },
     { path: '/habits', component: HabitsPage },

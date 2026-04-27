@@ -30,6 +30,31 @@ export class LifeController {
     return this.life.toggleTask(req.user.id, id);
   }
 
+  @Post('tasks/:id/split')
+  splitTask(@Req() req: RequestWithUser, @Param('id') id: string) {
+    return this.life.splitTask(req.user.id, id);
+  }
+
+  @Get('tasks/:id/subtasks')
+  getSubtasks(@Req() req: RequestWithUser, @Param('id') id: string) {
+    return this.life.getSubtasks(req.user.id, id);
+  }
+
+  @Patch('subtasks/:id/toggle')
+  toggleSubtask(@Req() req: RequestWithUser, @Param('id') id: string) {
+    return this.life.toggleSubtask(req.user.id, id);
+  }
+
+  @Get('focus/task')
+  focusTask(@Req() req: RequestWithUser) {
+    return this.life.focusTask(req.user.id);
+  }
+
+  @Get('focus/quick')
+  quickTask(@Req() req: RequestWithUser) {
+    return this.life.quickTask(req.user.id);
+  }
+
   @Get('projects')
   projects(@Req() req: RequestWithUser) {
     return this.life.projects(req.user.id);

@@ -62,6 +62,17 @@ model Task {
   source      String?
   createdAt   DateTime       @default(now())
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subtasks    Subtask[]
+}
+
+model Subtask {
+  id           String    @id @default(cuid())
+  taskId       String
+  title        String
+  durationMins Int       @default(10)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  task         Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
 }
 
 model Habit {

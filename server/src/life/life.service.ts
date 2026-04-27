@@ -140,6 +140,58 @@ export class LifeService {
     });
   }
 
+  // ── Focus Mode ─────────────────────────────────────────────────────────────
+
+  focusTask(userId: string) {
+    return this.prisma.task.findFirst({
+      where: { userId, completedAt: null },
+      include: { subtasks: { orderBy: { createdAt: 'asc' } } },
+      orderBy: [{ importance: 'desc' }, { dueDate: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  async quickTask(userId: string) {
+    const low = await this.prisma.task.findFirst({
+      where: { userId, completedAt: null, importance: 'LOW' },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (low) return low;
+    return this.prisma.task.findFirst({
+      where: { userId, completedAt: null },
+      orderBy: [{ importance: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  // ── Subtasks ───────────────────────────────────────────────────────────────
+
+  async splitTask(userId: string, taskId: string) {
+    const task = await this.prisma.task.findFirstOrThrow({ where: { id: taskId, userId } });
+    await this.prisma.subtask.deleteMany({ where: { taskId: task.id } });
+    const subtasks = await this.ai.splitTask(task.title);
+    return this.prisma.$transaction(
+      subtasks.map((s) =>
+        this.prisma.subtask.create({ data: { taskId: task.id, title: s.title, durationMins: s.durationMins } }),
+      ),
+    );
+  }
+
+  getSubtasks(userId: string, taskId: string) {
+    return this.prisma.subtask.findMany({
+      where: { task: { id: taskId, userId } },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async toggleSubtask(userId: string, subtaskId: string) {
+    const sub = await this.prisma.subtask.findFirstOrThrow({
+      where: { id: subtaskId, task: { userId } },
+    });
+    return this.prisma.subtask.update({
+      where: { id: sub.id },
+      data: { completedAt: sub.completedAt ? null : new Date() },
+    });
+  }
+
   projects(userId: string) {
     return this.prisma.project.findMany({
       where: { userId },
