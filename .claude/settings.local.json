@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "PowerShell(dir \"C:\\\\dev\\\\other\\\\Life-OS\\\\client\" -Recurse | Select-Object FullName | Where-Object { $_.FullName -notmatch 'node_modules' })",
+      "Bash(npm run *)",
+      "mcp__ide__getDiagnostics",
+      "Bash(curl -s -X POST https://openrouter.ai/api/v1/chat/completions -H 'Authorization: Bearer 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' -H 'Content-Type: application/json' -d '{\"model\":\"nvidia/nemotron-3-super-120b-a12b:free\",\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')",
+      "Bash(npm install *)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill *)",
+      "PowerShell(Stop-Process *)",
+      "Bash(node *)"
+    ]
+  }
+}

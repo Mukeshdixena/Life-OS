@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useStore } from './store/useStore';
 
 import Login from './pages/Login';
@@ -12,7 +12,6 @@ import History from './pages/History';
 import Settings from './pages/Settings';
 
 import Layout from './components/Layout';
-import CheckInModal from './components/CheckInModal';
 
 function ProtectedRoute({ children }) {
   const token = useStore((s) => s.token);
@@ -22,7 +21,6 @@ function ProtectedRoute({ children }) {
 
 export default function App() {
   const theme = useStore((s) => s.theme);
-  const showCheckinModal = useStore((s) => s.showCheckinModal);
   const initTheme = useStore((s) => s.initTheme);
 
   useEffect(() => {
@@ -34,9 +32,7 @@ export default function App() {
   }, [theme]);
 
   return (
-    <BrowserRouter>
-      {showCheckinModal && <CheckInModal />}
-
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />

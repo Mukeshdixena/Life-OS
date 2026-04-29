@@ -1,354 +1,308 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { ArrowRight, Sparkles, GripVertical, Pencil } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import * as api from '../api/index';
 
+const CAT_HEX = {
+  work: '#3B82F6', health: '#22C55E', learning: '#A855F7',
+  relationships: '#F97316', admin: '#6B7280', personal: '#EC4899', sleep: '#1E3A5F',
+};
+
+function StepIndicator({ step }) {
+  return (
+    <div className="steps">
+      {[1, 2, 3].map(n => (
+        <React.Fragment key={n}>
+          <div className={`step${step === n ? ' active' : ''}${step > n ? ' done' : ''}`}>
+            <span className="num">{step > n ? '✓' : n}</span>
+            <span>{n === 1 ? 'Check in' : n === 2 ? 'Set intent' : 'Review'}</span>
+          </div>
+          {n < 3 && <div className="step-bar" />}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+function Step1({ values, set, onNext }) {
+  const energy = [
+    { v: 1, em: '😴', l: 'Drained' },
+    { v: 2, em: '😐', l: 'Low' },
+    { v: 3, em: '🙂', l: 'Okay' },
+    { v: 4, em: '⚡', l: 'Energized' },
+    { v: 5, em: '🚀', l: 'Fired up' },
+  ];
+  const moods = ['Focused', 'Scattered', 'Stressed', 'Motivated'];
+  const user  = useStore(s => s.user);
+  const first = user?.name?.split(' ')[0] || 'there';
+
+  return (
+    <>
+      <h1 className="plan-h">Good morning, {first}</h1>
+      <p className="plan-sub">Take 30 seconds to check in with yourself before we plan.</p>
+
+      <div className="q-row">
+        <label>How's your energy?</label>
+        <div className="energy-row">
+          {energy.map(e => (
+            <button key={e.v} className={`energy-btn${values.energy === e.v ? ' sel' : ''}`} onClick={() => set('energy', e.v)}>
+              <span className="em">{e.em}</span>
+              <span className="lb">{e.l}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="q-row">
+        <label>Your headspace?</label>
+        <div className="mood-row">
+          {moods.map(m => (
+            <button key={m} className={`mood-pill${values.mood === m ? ' sel' : ''}`} onClick={() => set('mood', m)}>{m}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="q-row">
+        <label>Sleep quality?</label>
+        <div className="stars">
+          {[1,2,3,4,5].map(n => (
+            <button key={n} className={`star-btn${values.sleep >= n ? ' lit' : ''}`} onClick={() => set('sleep', n)}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l2.9 6.9 7.4.6-5.6 4.9 1.7 7.3-6.4-3.9-6.4 3.9 1.7-7.3-5.6-4.9 7.4-.6z"/>
+              </svg>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+        <button className="btn btn-primary btn-large" onClick={onNext}>
+          Continue <ArrowRight size={16} />
+        </button>
+      </div>
+    </>
+  );
+}
+
+function Step2({ values, set, onBack, onNext, loading }) {
+  const CHIPS = ['Gym', 'Deep work', 'Reading', 'Meditation', 'Walk', 'Call family'];
+  return (
+    <>
+      <h1 className="plan-h">What's on your plate?</h1>
+      <p className="plan-sub">Brain-dump everything. The system will arrange it into blocks.</p>
+
+      <div className="intent-card">
+        <span className="label-eyebrow">Today's intent</span>
+        <textarea className="textarea" style={{ marginTop: 10 }}
+          placeholder="e.g. Morning gym, meetings till 2pm, finish the project, call family, some reading before bed…"
+          value={values.intent}
+          onChange={e => set('intent', e.target.value)}
+        />
+        <div className="chip-row">
+          {CHIPS.map(c => (
+            <button key={c} className="chip"
+              onClick={() => set('intent', (values.intent ? values.intent + ', ' : '') + c.toLowerCase())}>
+              + {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
+        <button className="btn btn-ghost" onClick={onBack}>← Back</button>
+        <button className="btn btn-primary btn-large" onClick={onNext} disabled={!values.intent.trim()}>
+          <Sparkles size={16} /> Generate my day
+        </button>
+      </div>
+
+      {loading && (
+        <div style={{ marginTop: 28 }}>
+          <span className="label-eyebrow">Generating</span>
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[68, 92, 56, 110, 80, 64].map((h, i) => (
+              <div key={i} className="skel" style={{ height: h }} />
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Step3({ blocks, onBack, onConfirm, loading, error }) {
+  if (!blocks.length) return (
+    <>
+      <h1 className="plan-h">Review your day</h1>
+      <p className="plan-sub">No blocks generated yet.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
+        <button className="btn btn-outline" onClick={onBack}>← Re-generate</button>
+      </div>
+    </>
+  );
+
+  const totalMins = blocks.reduce((s, b) => {
+    const dur = (new Date(b.end_time) - new Date(b.start_time)) / 60000;
+    return s + dur;
+  }, 0);
+  const totalH = `${Math.floor(totalMins / 60)}h ${Math.round(totalMins % 60)}m`;
+
+  return (
+    <>
+      <h1 className="plan-h">Review your day</h1>
+      <p className="plan-sub">Confirm when ready to start.</p>
+
+      {error && (
+        <div style={{ color: '#E0524A', marginBottom: 16, padding: '10px 14px', background: 'color-mix(in srgb, #E0524A 10%, transparent)', borderRadius: 8, fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      <div className="review-grid">
+        <div className="card" style={{ padding: 16 }}>
+          {blocks.map((b, i) => {
+            const c = b.color || CAT_HEX[b.category] || '#6B7280';
+            return (
+              <div key={i} style={{
+                display: 'grid', gridTemplateColumns: '20px 60px 1fr auto auto',
+                gap: 12, alignItems: 'center', padding: '10px 6px',
+                borderTop: i ? '1px dashed var(--border)' : 'none',
+              }}>
+                <GripVertical size={16} color="var(--text-3)" />
+                <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                  {format(new Date(b.start_time), 'h:mm a')}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 3, height: 18, background: c, borderRadius: 2, flexShrink: 0 }} />
+                  <span style={{ fontWeight: 500 }}>{b.title}</span>
+                </span>
+                <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                  {Math.round((new Date(b.end_time) - new Date(b.start_time)) / 60000)}m
+                </span>
+                <Pencil size={14} color="var(--text-3)" />
+              </div>
+            );
+          })}
+        </div>
+
+        <div>
+          <div className="card">
+            <span className="label-eyebrow">Summary</span>
+            <div style={{ marginTop: 14 }}>
+              <div className="summary-stat"><span>Total planned</span><span className="v">{totalH}</span></div>
+              <div className="summary-stat"><span>Blocks</span><span className="v">{blocks.length}</span></div>
+            </div>
+          </div>
+          <div className="card" style={{ marginTop: 16 }}>
+            <span className="label-eyebrow">By category</span>
+            <div className="cat-bar" style={{ marginTop: 14 }}>
+              {Object.entries(
+                blocks.reduce((acc, b) => {
+                  const dur = (new Date(b.end_time) - new Date(b.start_time)) / 60000;
+                  acc[b.category] = (acc[b.category] || 0) + dur;
+                  return acc;
+                }, {})
+              ).map(([cat, dur]) => (
+                <div key={cat} style={{ width: `${(dur / totalMins) * 100}%`, background: CAT_HEX[cat] || '#6B7280' }} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+              {[...new Set(blocks.map(b => b.category))].map(cat => (
+                <span key={cat} className="pill-badge" style={{ '--cat': CAT_HEX[cat] || '#6B7280' }}>
+                  <span className="dot" />{cat}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
+        <button className="btn btn-outline" onClick={onBack} disabled={loading}>← Re-generate</button>
+        <button className="btn btn-primary btn-large" onClick={onConfirm} disabled={loading}>
+          {loading ? 'Saving…' : <>Start my day <ArrowRight size={16} /></>}
+        </button>
+      </div>
+    </>
+  );
+}
+
 export default function Plan() {
-  const navigate = useNavigate();
+  const navigate    = useNavigate();
   const { user, todayPlan, setTodayPlan } = useStore();
 
-  const [step, setStep] = useState(1);
-  const [moodScore, setMoodScore] = useState(3);
-  const [energyScore, setEnergyScore] = useState(3);
-  const [mentalState, setMentalState] = useState('focused');
-  const [sleepQuality, setSleepQuality] = useState(3);
-  const [prompt, setPrompt] = useState('');
-  const [generatedBlocks, setGeneratedBlocks] = useState([]);
+  const [step,   setStep]   = useState(1);
+  const [values, setValues] = useState({ energy: 4, mood: 'Focused', sleep: 4, intent: '' });
+  const [blocks, setBlocks] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error,   setError]   = useState('');
 
-  // Redirect if plan already exists in store
+  const set = (k, v) => setValues(s => ({ ...s, [k]: v }));
+
   useEffect(() => {
-    if (todayPlan) {
-      navigate('/today', { replace: true });
-    }
-  }, []);
+    if (todayPlan) { navigate('/today', { replace: true }); return; }
+    api.plan.getToday()
+      .then(({ data }) => { if (data?.plan) { setTodayPlan(data.plan, data.blocks || []); navigate('/today', { replace: true }); } })
+      .catch(() => {});
+  }, []); // eslint-disable-line
 
-  // Fetch today's plan on mount — redirect if it exists
-  useEffect(() => {
-    async function checkPlan() {
-      try {
-        const { data } = await api.plan.getToday();
-        if (data?.plan) {
-          setTodayPlan(data.plan, data.blocks || []);
-          navigate('/today', { replace: true });
-        }
-      } catch {
-        // No plan yet — stay on this page
-      }
-    }
-    checkPlan();
-  }, []);
-
-  async function handleGenerate() {
-    if (!prompt.trim()) return;
+  async function generate() {
+    if (!values.intent.trim()) return;
     setError('');
     setLoading(true);
     try {
       const today = new Date().toISOString().split('T')[0];
       const { data } = await api.plan.generate({
-        prompt,
-        mood_score: moodScore,
-        energy_score: energyScore,
-        mental_state: mentalState,
+        prompt: values.intent,
+        mood_score: values.mood === 'Focused' || values.mood === 'Motivated' ? 4 : 2,
+        energy_score: values.energy,
+        mental_state: values.mood.toLowerCase(),
         date: today,
       });
-      setGeneratedBlocks(data.blocks || []);
+      setBlocks(data.blocks || []);
       setStep(3);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to generate plan. Please try again.');
+      setError(err?.response?.data?.message || 'Failed to generate. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleConfirm() {
+  async function confirm() {
     setError('');
     setLoading(true);
     try {
       const today = new Date().toISOString().split('T')[0];
       const { data } = await api.plan.confirm({
         date: today,
-        prompt_used: prompt,
-        mood_score: moodScore,
-        energy_score: energyScore,
-        mental_state: mentalState,
-        blocks: generatedBlocks,
+        prompt_used: values.intent,
+        mood_score: values.mood === 'Focused' || values.mood === 'Motivated' ? 4 : 2,
+        energy_score: values.energy,
+        mental_state: values.mood.toLowerCase(),
+        blocks,
       });
       setTodayPlan(data.plan, data.blocks);
       navigate('/today');
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to confirm plan. Please try again.');
+      setError(err?.response?.data?.message || 'Failed to confirm. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
-  // ── Step 1: Morning Check-in ───────────────────────────────
-  if (step === 1) {
-    return (
-      <div
-        className="page page-transition"
-        style={{ maxWidth: 600, margin: '0 auto', paddingTop: '4rem' }}
-      >
-        <h1 style={{ fontFamily: 'DM Serif Display', marginBottom: '0.5rem' }}>
-          Good morning, {user?.name?.split(' ')[0]} ✨
-        </h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2.5rem' }}>
-          How are you feeling today?
-        </p>
-
-        {/* Energy Level */}
-        <label className="label">Energy Level</label>
-        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
-          {[
-            ['😴', 'Exhausted', 1],
-            ['😐', 'Low', 2],
-            ['🙂', 'Okay', 3],
-            ['⚡', 'Good', 4],
-            ['🚀', 'Amazing', 5],
-          ].map(([emoji, label, val]) => (
-            <button
-              key={val}
-              onClick={() => setEnergyScore(val)}
-              style={{
-                flex: 1,
-                padding: '1rem 0.5rem',
-                borderRadius: 10,
-                border: '2px solid',
-                borderColor: energyScore === val ? 'var(--accent)' : 'var(--border)',
-                background: energyScore === val ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
-                cursor: 'pointer',
-                textAlign: 'center',
-                transition: '200ms',
-              }}
-            >
-              <div style={{ fontSize: '1.5rem' }}>{emoji}</div>
-              <div
-                style={{
-                  fontSize: '0.7rem',
-                  color: 'var(--text-secondary)',
-                  marginTop: '0.25rem',
-                }}
-              >
-                {label}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* Mental State */}
-        <label className="label">Mental State</label>
-        <div
-          style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}
-        >
-          {['Focused', 'Scattered', 'Stressed', 'Motivated'].map((state) => (
-            <button
-              key={state}
-              onClick={() => setMentalState(state.toLowerCase())}
-              style={{
-                padding: '0.5rem 1.25rem',
-                borderRadius: 20,
-                border: '1.5px solid',
-                borderColor:
-                  mentalState === state.toLowerCase() ? 'var(--accent)' : 'var(--border)',
-                background:
-                  mentalState === state.toLowerCase() ? 'var(--accent)' : 'transparent',
-                color:
-                  mentalState === state.toLowerCase() ? 'white' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                transition: '200ms',
-                fontSize: '0.875rem',
-              }}
-            >
-              {state}
-            </button>
-          ))}
-        </div>
-
-        {/* Overall Mood */}
-        <label className="label">Overall Mood</label>
-        <div
-          style={{ display: 'flex', gap: '0.5rem', fontSize: '1.5rem', marginBottom: '2rem' }}
-        >
-          {[1, 2, 3, 4, 5].map((n) => (
-            <span
-              key={n}
-              onClick={() => setMoodScore(n)}
-              style={{
-                cursor: 'pointer',
-                color: n <= moodScore ? '#F59E0B' : 'var(--border)',
-                userSelect: 'none',
-              }}
-            >
-              ★
-            </span>
-          ))}
-        </div>
-
-        <button
-          className="btn btn-primary"
-          onClick={() => setStep(2)}
-          style={{ width: '100%', padding: '0.875rem', justifyContent: 'center' }}
-        >
-          Continue →
-        </button>
-      </div>
-    );
-  }
-
-  // ── Step 2: Intent Prompt ──────────────────────────────────
-  if (step === 2) {
-    return (
-      <div
-        className="page page-transition"
-        style={{ maxWidth: 600, margin: '0 auto', paddingTop: '4rem' }}
-      >
-        <h2 style={{ fontFamily: 'DM Serif Display', marginBottom: '0.5rem' }}>
-          What&apos;s on your plate today?
-        </h2>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
-          Just tell me naturally. I&apos;ll build your day around it.
-        </p>
-
-        <textarea
-          className="textarea"
-          rows={8}
-          placeholder="E.g., I have a big client presentation at 2pm, need to finish the report before that, want to go for a run, and pick up groceries..."
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          style={{ marginBottom: '1.5rem', fontSize: '1rem', lineHeight: 1.6 }}
-        />
-
-        {error && (
-          <p style={{ color: '#EF4444', marginBottom: '1rem', fontSize: '0.875rem' }}>
-            {error}
-          </p>
-        )}
-
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button className="btn btn-secondary" onClick={() => setStep(1)}>
-            ← Back
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleGenerate}
-            disabled={loading || !prompt.trim()}
-            style={{ flex: 1, padding: '0.875rem', justifyContent: 'center' }}
-          >
-            {loading ? 'Generating your day…' : '✨ Generate My Day'}
-          </button>
-        </div>
-
-        {/* Loading skeleton */}
-        {loading && (
-          <div style={{ marginTop: '2rem' }}>
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="skeleton"
-                style={{ height: 60, marginBottom: '0.75rem', borderRadius: 10 }}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── Step 3: Review & Confirm ───────────────────────────────
   return (
-    <div className="page page-transition" style={{ paddingTop: '2rem' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1.5rem',
-          flexWrap: 'wrap',
-          gap: '0.75rem',
-        }}
-      >
-        <h2 style={{ fontFamily: 'DM Serif Display' }}>Here&apos;s your day 📅</h2>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            className="btn btn-secondary"
-            onClick={handleGenerate}
-            disabled={loading}
-          >
-            ↺ Regenerate
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleConfirm}
-            disabled={loading}
-          >
-            🚀 Start My Day
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <p
-          style={{
-            color: '#EF4444',
-            marginBottom: '1rem',
-            fontSize: '0.875rem',
-            maxWidth: 600,
-            margin: '0 auto 1rem',
-          }}
-        >
-          {error}
-        </p>
+    <div className="page-fade plan-wrap">
+      <StepIndicator step={step} />
+      {step === 1 && <Step1 values={values} set={set} onNext={() => setStep(2)} />}
+      {step === 2 && (
+        <Step2 values={values} set={set} loading={loading}
+          onBack={() => setStep(1)}
+          onNext={() => { setStep(2); generate(); }} />
       )}
-
-      {/* Loading skeleton while regenerating */}
-      {loading ? (
-        <div style={{ maxWidth: 600, margin: '0 auto' }}>
-          {[...Array(6)].map((_, i) => (
-            <div
-              key={i}
-              className="skeleton"
-              style={{ height: 60, marginBottom: '0.75rem', borderRadius: 10 }}
-            />
-          ))}
-        </div>
-      ) : (
-        <div style={{ maxWidth: 600, margin: '0 auto' }}>
-          {generatedBlocks.map((block, i) => (
-            <div
-              key={i}
-              className="card"
-              style={{
-                marginBottom: '0.75rem',
-                borderLeft: `3px solid ${block.color}`,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 500 }}>{block.title}</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {format(new Date(block.start_time), 'h:mm a')} –{' '}
-                  {format(new Date(block.end_time), 'h:mm a')}
-                </div>
-              </div>
-              <span
-                className="badge"
-                style={{
-                  background: `${block.color}25`,
-                  color: block.color,
-                  flexShrink: 0,
-                  marginLeft: '1rem',
-                }}
-              >
-                {block.category}
-              </span>
-            </div>
-          ))}
-        </div>
+      {step === 3 && (
+        <Step3 blocks={blocks} onBack={() => setStep(2)}
+          onConfirm={confirm} loading={loading} error={error} />
       )}
     </div>
   );

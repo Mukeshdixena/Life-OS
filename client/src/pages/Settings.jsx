@@ -1,440 +1,255 @@
 import { useState, useEffect } from 'react';
 import { useStore, CATEGORY_COLORS } from '../store/useStore';
+import { Plus, GripVertical } from 'lucide-react';
 import * as api from '../api/index';
-import ThemeToggle from '../components/ThemeToggle';
 
-// ── Profile Section ────────────────────────────────────────
-function ProfileSection({ user }) {
+const CAT_HEX = CATEGORY_COLORS;
+function catHex(c) { return CAT_HEX[c] || '#6B7280'; }
+
+const CAT_NAMES = {
+  work: 'Deep Work', health: 'Health', learning: 'Learning',
+  relationships: 'People', admin: 'Admin', personal: 'Personal', sleep: 'Rest',
+};
+
+/* ── ThemeTab ───────────────────────────────────────────────── */
+function ThemeTab({ theme, onTheme }) {
   return (
-    <div>
-      <h2 style={{ fontFamily: 'DM Serif Display', marginBottom: '1.5rem' }}>Profile</h2>
-
-      <div className="card">
-        <div style={{ marginBottom: '1.25rem' }}>
-          <label className="label" htmlFor="profile-name">
-            Name
-          </label>
-          <input
-            id="profile-name"
-            type="text"
-            className="input"
-            value={user?.name || ''}
-            readOnly
-            style={{ cursor: 'default', opacity: 0.8 }}
-          />
+    <div className="card card-tall">
+      <div className="label-eyebrow">Appearance</div>
+      <h2 style={{ fontFamily: 'DM Serif Display', fontSize: 28, margin: '4px 0 18px', letterSpacing: '-0.01em' }}>
+        Pick your atmosphere
+      </h2>
+      <div className="theme-preview-grid">
+        <div className={`theme-preview light${theme === 'light' ? ' sel' : ''}`} onClick={() => onTheme('light')}>
+          <div className="tp-label">Paper · Light</div>
+          <div className="mock">
+            <div className="tp-line lg" /><div className="tp-line md" />
+            <div className="tp-line sm" /><div className="tp-line md" /><div className="tp-line lg" />
+          </div>
         </div>
-
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label className="label" htmlFor="profile-email">
-            Email
-          </label>
-          <input
-            id="profile-email"
-            type="email"
-            className="input"
-            value={user?.email || ''}
-            readOnly
-            style={{ cursor: 'default', opacity: 0.8 }}
-          />
+        <div className={`theme-preview dark${theme === 'dark' ? ' sel' : ''}`} onClick={() => onTheme('dark')}>
+          <div className="tp-label">Quiet night · Dark</div>
+          <div className="mock">
+            <div className="tp-line lg" /><div className="tp-line md" />
+            <div className="tp-line sm" /><div className="tp-line md" /><div className="tp-line lg" />
+          </div>
         </div>
-
-        <p
-          style={{
-            fontSize: '0.8rem',
-            color: 'var(--text-muted)',
-            padding: '0.75rem 1rem',
-            background: 'var(--bg-tertiary)',
-            borderRadius: 8,
-            border: '1px solid var(--border)',
-          }}
-        >
-          Profile editing coming soon.
-        </p>
       </div>
+      <p style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 18, lineHeight: 1.55 }}>
+        Your theme stays where you set it — Life OS won't follow your system.
+        Some moments call for paper. Others, for the quiet of night.
+      </p>
     </div>
   );
 }
 
-// ── Habits Section ─────────────────────────────────────────
-function HabitsSection({ habits, onAdd, onToggle, newHabitName, setNewHabitName }) {
-  const [newCategory, setNewCategory] = useState('health');
-  const [adding, setAdding] = useState(false);
+/* ── AreasTab ───────────────────────────────────────────────── */
+function AreasTab() {
+  return (
+    <div>
+      <div className="label-eyebrow" style={{ marginBottom: 12 }}>Your life areas</div>
+      {Object.entries(CAT_NAMES).map(([id, name]) => (
+        <div key={id} className="area-row" style={{ '--cat': catHex(id) }}>
+          <span className="area-sw" />
+          <span className="name">{name}</span>
+          <span className="meta">{Math.floor(Math.random() * 12) + 2}h/wk</span>
+          <button className="toggle-mini on" />
+        </div>
+      ))}
+      <button className="btn btn-outline" style={{ marginTop: 8 }}>
+        <Plus size={14} /> Add area
+      </button>
+    </div>
+  );
+}
 
-  async function handleAdd() {
-    if (!newHabitName.trim()) return;
+/* ── ProfileTab ─────────────────────────────────────────────── */
+function ProfileTab({ user }) {
+  return (
+    <div className="card card-tall">
+      <div className="label-eyebrow">Profile</div>
+      <h2 style={{ fontFamily: 'DM Serif Display', fontSize: 28, margin: '4px 0 18px', letterSpacing: '-0.01em' }}>
+        Your account
+      </h2>
+      <div style={{ marginBottom: 18 }}>
+        <label className="label" htmlFor="p-name">Name</label>
+        <input id="p-name" className="input" type="text" value={user?.name || ''} readOnly style={{ cursor: 'default', opacity: 0.8 }} />
+      </div>
+      <div style={{ marginBottom: 18 }}>
+        <label className="label" htmlFor="p-email">Email</label>
+        <input id="p-email" className="input" type="email" value={user?.email || ''} readOnly style={{ cursor: 'default', opacity: 0.8 }} />
+      </div>
+      <p style={{ fontSize: 12.5, color: 'var(--text-3)', padding: '10px 14px', background: 'var(--bg-3)', borderRadius: 8, border: '1px solid var(--border)' }}>
+        Profile editing coming soon.
+      </p>
+    </div>
+  );
+}
+
+/* ── HabitsTab ──────────────────────────────────────────────── */
+function HabitsTab() {
+  const [habits,       setHabits]       = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [newName,      setNewName]      = useState('');
+  const [newCat,       setNewCat]       = useState('health');
+  const [adding,       setAdding]       = useState(false);
+
+  useEffect(() => {
+    api.settings.getHabits()
+      .then(({ data }) => setHabits(data?.habits || data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function addHabit() {
+    if (!newName.trim()) return;
     setAdding(true);
-    await onAdd(newHabitName.trim(), newCategory);
-    setAdding(false);
+    try {
+      await api.settings.saveHabit({ name: newName.trim(), category: newCat, is_active: true });
+      const { data } = await api.settings.getHabits();
+      setHabits(data?.habits || data || []);
+      setNewName('');
+    } catch {} finally { setAdding(false); }
   }
+
+  async function toggleHabit(habit) {
+    const updated = { ...habit, is_active: !habit.is_active };
+    setHabits(prev => prev.map(h => h.id === habit.id ? updated : h));
+    try { await api.settings.updateHabit(habit.id, { is_active: updated.is_active }); }
+    catch { setHabits(prev => prev.map(h => h.id === habit.id ? habit : h)); }
+  }
+
+  if (loading) return (
+    <div>
+      {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 56, marginBottom: 8, borderRadius: 12 }} />)}
+    </div>
+  );
 
   return (
     <div>
-      <h2 style={{ fontFamily: 'DM Serif Display', marginBottom: '1.5rem' }}>Habits</h2>
-
-      {/* Habit list */}
-      {habits.length === 0 ? (
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            No habits yet. Add your first habit below.
-          </p>
-        </div>
-      ) : (
-        <div style={{ marginBottom: '1.5rem' }}>
-          {habits.map((habit) => (
-            <div
-              key={habit.id}
-              className="card"
-              style={{
-                marginBottom: '0.75rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '1rem 1.25rem',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    background: CATEGORY_COLORS[habit.category] || CATEGORY_COLORS.personal,
-                    flexShrink: 0,
-                  }}
-                />
-                <span
-                  style={{
-                    fontWeight: 500,
-                    color: habit.is_active ? 'var(--text-primary)' : 'var(--text-muted)',
-                    textDecoration: habit.is_active ? 'none' : 'line-through',
-                  }}
-                >
-                  {habit.name}
-                </span>
-                <span
-                  className="badge"
-                  style={{
-                    background: `${CATEGORY_COLORS[habit.category] || CATEGORY_COLORS.personal}20`,
-                    color: CATEGORY_COLORS[habit.category] || CATEGORY_COLORS.personal,
-                  }}
-                >
-                  {habit.category}
-                </span>
-              </div>
-
-              {/* Toggle */}
-              <button
-                onClick={() => onToggle(habit)}
-                style={{
-                  width: 44,
-                  height: 24,
-                  borderRadius: 12,
-                  border: 'none',
-                  background: habit.is_active ? 'var(--accent)' : 'var(--border)',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  transition: 'background 200ms',
-                  flexShrink: 0,
-                }}
-                aria-label={habit.is_active ? 'Deactivate habit' : 'Activate habit'}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 3,
-                    left: habit.is_active ? 23 : 3,
-                    width: 18,
-                    height: 18,
-                    borderRadius: '50%',
-                    background: 'white',
-                    transition: 'left 200ms',
-                  }}
-                />
-              </button>
-            </div>
-          ))}
+      <div className="label-eyebrow" style={{ marginBottom: 12 }}>Your habits</div>
+      {habits.length === 0 && (
+        <div className="card" style={{ marginBottom: 16, padding: '16px 18px', color: 'var(--text-2)', fontSize: 13 }}>
+          No habits yet. Add one below.
         </div>
       )}
-
-      {/* Add habit form */}
-      <div className="card">
-        <h3
-          style={{
-            fontFamily: 'DM Serif Display',
-            fontSize: '1.1rem',
-            marginBottom: '1rem',
-          }}
-        >
-          Add Habit
-        </h3>
-        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            className="input"
-            placeholder="Habit name (e.g. Morning run)"
-            value={newHabitName}
-            onChange={(e) => setNewHabitName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            style={{ flex: 1, minWidth: 160 }}
+      {habits.map(h => (
+        <div key={h.id} className="area-row" style={{ '--cat': catHex(h.category) }}>
+          <span className="area-sw" />
+          <span className="name">{h.name}</span>
+          <span className="meta">{h.category}</span>
+          <button
+            className={`toggle-mini${h.is_active ? ' on' : ''}`}
+            onClick={() => toggleHabit(h)}
           />
-          <select
-            className="input"
-            value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value)}
-            style={{ width: 160, flexShrink: 0 }}
-          >
-            {Object.keys(CATEGORY_COLORS).filter((c) => c !== 'sleep').map((cat) => (
-              <option key={cat} value={cat}>
-                {cat.charAt(0).toUpperCase() + cat.slice(1)}
-              </option>
+        </div>
+      ))}
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="label-eyebrow" style={{ marginBottom: 12 }}>Add habit</div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <input className="input" type="text" placeholder="Habit name…" value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addHabit()}
+            style={{ flex: 1, minWidth: 140 }} />
+          <select className="input" value={newCat} onChange={e => setNewCat(e.target.value)} style={{ width: 140, flexShrink: 0 }}>
+            {Object.entries(CAT_NAMES).map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
             ))}
           </select>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={handleAdd}
-          disabled={adding || !newHabitName.trim()}
-        >
-          {adding ? 'Adding…' : '+ Add Habit'}
+        <button className="btn btn-primary" onClick={addHabit} disabled={adding || !newName.trim()}>
+          {adding ? 'Adding…' : <><Plus size={14} /> Add habit</>}
         </button>
       </div>
     </div>
   );
 }
 
-// ── Theme Section ──────────────────────────────────────────
-function ThemeSection() {
-  const { theme, toggleTheme } = useStore();
-
+/* ── Non-negotiables tab (stub) ─────────────────────────────── */
+function NNTab() {
+  const items = [
+    { name: 'Strength training', dur: '60m', on: true },
+    { name: 'Read',              dur: '30m', on: true },
+    { name: 'Journal',           dur: '10m', on: true },
+    { name: '8h sleep window',   dur: '8h',  on: true },
+    { name: 'Connect with someone', dur: '20m', on: false },
+  ];
   return (
     <div>
-      <h2 style={{ fontFamily: 'DM Serif Display', marginBottom: '1.5rem' }}>Theme</h2>
-
-      <div className="card">
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-          Choose how Life OS looks. Your preference is saved automatically.
-        </p>
-
-        {/* Visual theme picker */}
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
-          {/* Light preview */}
-          <button
-            onClick={() => theme !== 'light' && toggleTheme()}
-            style={{
-              flex: 1,
-              padding: '1.25rem',
-              borderRadius: 12,
-              border: '2px solid',
-              borderColor: theme === 'light' ? 'var(--accent)' : 'var(--border)',
-              background: '#F8F7F4',
-              cursor: 'pointer',
-              textAlign: 'center',
-              transition: 'border-color 200ms',
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                height: 60,
-                borderRadius: 8,
-                background: '#FFFFFF',
-                border: '1px solid #E5E2DA',
-                marginBottom: '0.75rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              <div style={{ width: 40, height: 8, borderRadius: 4, background: '#1A1814' }} />
-              <div style={{ width: 24, height: 8, borderRadius: 4, background: '#E5E2DA' }} />
-            </div>
-            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#1A1814' }}>
-              Light
-            </span>
-            {theme === 'light' && (
-              <span
-                style={{
-                  display: 'block',
-                  fontSize: '0.75rem',
-                  color: '#2563EB',
-                  marginTop: '0.25rem',
-                }}
-              >
-                ✓ Active
-              </span>
-            )}
-          </button>
-
-          {/* Dark preview */}
-          <button
-            onClick={() => theme !== 'dark' && toggleTheme()}
-            style={{
-              flex: 1,
-              padding: '1.25rem',
-              borderRadius: 12,
-              border: '2px solid',
-              borderColor: theme === 'dark' ? 'var(--accent)' : 'var(--border)',
-              background: '#0F0E0C',
-              cursor: 'pointer',
-              textAlign: 'center',
-              transition: 'border-color 200ms',
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                height: 60,
-                borderRadius: 8,
-                background: '#1A1916',
-                border: '1px solid #2E2C28',
-                marginBottom: '0.75rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              <div style={{ width: 40, height: 8, borderRadius: 4, background: '#F0EDE6' }} />
-              <div style={{ width: 24, height: 8, borderRadius: 4, background: '#2E2C28' }} />
-            </div>
-            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#F0EDE6' }}>
-              Dark
-            </span>
-            {theme === 'dark' && (
-              <span
-                style={{
-                  display: 'block',
-                  fontSize: '0.75rem',
-                  color: '#3B82F6',
-                  marginTop: '0.25rem',
-                }}
-              >
-                ✓ Active
-              </span>
-            )}
-          </button>
+      <div className="label-eyebrow" style={{ marginBottom: 12 }}>Non-negotiables — your daily floor</div>
+      {items.map((n, i) => (
+        <div key={i} className="area-row" style={{ '--cat': '#3B82F6' }}>
+          <GripVertical size={16} color="var(--text-3)" />
+          <span className="name">{n.name}</span>
+          <span className="meta">{n.dur}</span>
+          <button className={`toggle-mini${n.on ? ' on' : ''}`} />
         </div>
-
-        {/* Quick toggle */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            paddingTop: '1rem',
-            borderTop: '1px solid var(--border)',
-          }}
-        >
-          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            Quick toggle:
-          </span>
-          <ThemeToggle />
-          <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-            Currently: <strong style={{ color: 'var(--text-primary)' }}>{theme}</strong>
-          </span>
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
 
-// ── Main Settings Page ─────────────────────────────────────
+/* ── Coming soon stub ───────────────────────────────────────── */
+function StubTab({ label }) {
+  return (
+    <div className="card card-tall">
+      <div className="label-eyebrow">{label}</div>
+      <h2 style={{ fontFamily: 'DM Serif Display', fontSize: 26, margin: '6px 0 12px', letterSpacing: '-0.01em' }}>Coming together</h2>
+      <p style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.6 }}>
+        This panel hosts the {label.toLowerCase()} configuration. Theme and Life Areas are wired to live state.
+      </p>
+    </div>
+  );
+}
+
+/* ── Main Settings Page ─────────────────────────────────────── */
 export default function Settings() {
-  const user = useStore((s) => s.user);
+  const user      = useStore(s => s.user);
+  const theme     = useStore(s => s.theme);
+  const toggleTheme = useStore(s => s.toggleTheme);
+  const [tab, setTab] = useState('theme');
 
-  const [activeSection, setActiveSection] = useState('profile');
-  const [habits, setHabits] = useState([]);
-  const [newHabitName, setNewHabitName] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  // Load habits on mount
-  useEffect(() => {
-    async function loadHabits() {
-      setLoading(true);
-      try {
-        const { data } = await api.settings.getHabits();
-        setHabits(data?.habits || data || []);
-      } catch {
-        // Non-critical — habits will be empty
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadHabits();
-  }, []);
-
-  async function handleAddHabit(name, category) {
-    try {
-      await api.settings.saveHabit({ name, category, is_active: true });
-      // Refresh list
-      const { data } = await api.settings.getHabits();
-      setHabits(data?.habits || data || []);
-      setNewHabitName('');
-    } catch {
-      // Silently fail — could add error toast here
-    }
+  function setTheme(v) {
+    if (theme !== v) toggleTheme();
   }
 
-  async function handleToggleHabit(habit) {
-    const updated = { ...habit, is_active: !habit.is_active };
-    // Optimistic update
-    setHabits((prev) => prev.map((h) => (h.id === habit.id ? updated : h)));
-    try {
-      await api.settings.updateHabit(habit.id, { is_active: updated.is_active });
-    } catch {
-      // Revert on failure
-      setHabits((prev) => prev.map((h) => (h.id === habit.id ? habit : h)));
-    }
-  }
+  const tabs = [
+    { id: 'profile', label: 'Profile' },
+    { id: 'areas',   label: 'Life Areas' },
+    { id: 'nn',      label: 'Non-Negotiables' },
+    { id: 'habits',  label: 'Habits' },
+    { id: 'prefs',   label: 'Preferences' },
+    { id: 'theme',   label: 'Theme' },
+    { id: 'data',    label: 'Data' },
+  ];
 
   return (
-    <div style={{ display: 'flex', gap: '2rem', padding: '2rem', minHeight: '100%' }}>
-      {/* Left sidebar — section tabs */}
-      <div style={{ width: 200, flexShrink: 0 }}>
-        <h1 className="section-title">Settings</h1>
-        {['profile', 'habits', 'theme'].map((s) => (
-          <button
-            key={s}
-            onClick={() => setActiveSection(s)}
-            className={`btn ${activeSection === s ? 'btn-primary' : 'btn-ghost'}`}
-            style={{
-              width: '100%',
-              justifyContent: 'flex-start',
-              marginBottom: '0.5rem',
-              textTransform: 'capitalize',
-            }}
-          >
-            {s}
-          </button>
-        ))}
+    <div className="page-fade">
+      <div className="dash-head">
+        <div>
+          <div className="label-eyebrow" style={{ marginBottom: 4 }}>Configuration</div>
+          <h1>Settings</h1>
+        </div>
       </div>
 
-      {/* Right — section content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {activeSection === 'profile' && <ProfileSection user={user} />}
-        {activeSection === 'habits' && (
-          loading ? (
-            <div>
-              {[...Array(3)].map((_, i) => (
-                <div
-                  key={i}
-                  className="skeleton"
-                  style={{ height: 64, marginBottom: '0.75rem', borderRadius: 10 }}
-                />
-              ))}
-            </div>
-          ) : (
-            <HabitsSection
-              habits={habits}
-              onAdd={handleAddHabit}
-              onToggle={handleToggleHabit}
-              newHabitName={newHabitName}
-              setNewHabitName={setNewHabitName}
-            />
-          )
-        )}
-        {activeSection === 'theme' && <ThemeSection />}
+      <div className="settings-grid">
+        <div className="set-nav">
+          {tabs.map(t => (
+            <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div>
+          {tab === 'theme'   && <ThemeTab theme={theme} onTheme={setTheme} />}
+          {tab === 'areas'   && <AreasTab />}
+          {tab === 'profile' && <ProfileTab user={user} />}
+          {tab === 'habits'  && <HabitsTab />}
+          {tab === 'nn'      && <NNTab />}
+          {(tab === 'prefs' || tab === 'data') && <StubTab label={tabs.find(t => t.id === tab).label} />}
+        </div>
       </div>
     </div>
   );

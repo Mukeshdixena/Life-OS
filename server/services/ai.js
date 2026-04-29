@@ -1,31 +1,23 @@
-const axios = require('axios');
+const Anthropic = require('@anthropic-ai/sdk');
 
-const SYSTEM_PROMPT = `You are a personal life scheduler. Generate a complete 24-hour time-blocked schedule with NO gaps from wake time to sleep. Every minute must be accounted for. Return ONLY valid JSON — no explanation, no markdown, no extra text. Format: { "blocks": [ { "title": string, "category": string, "start_time": ISO string, "end_time": ISO string, "color": hex string, "energy_level": "high"|"medium"|"low", "is_non_negotiable": boolean } ] } Categories: work, health, learning, relationships, admin, personal, sleep. Colors: work=#3B82F6, health=#22C55E, learning=#A855F7, relationships=#F97316, admin=#6B7280, personal=#EC4899, sleep=#1E293B. Be realistic with timing. Include meals, transitions, morning routine, evening wind-down.`;
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+const SYSTEM_PROMPT = `You are a personal life scheduler. Generate a complete day schedule from wake time to sleep. Return ONLY valid JSON — no explanation, no markdown, no extra text. Format: { "blocks": [ { "title": string, "category": string, "start_time": ISO datetime string, "end_time": ISO datetime string, "color": hex string, "energy_level": "high"|"medium"|"low", "is_non_negotiable": boolean } ] } Categories: work, health, learning, relationships, admin, personal, sleep. Colors: work=#3B82F6, health=#22C55E, learning=#A855F7, relationships=#F97316, admin=#6B7280, personal=#EC4899, sleep=#1E293B. Be realistic with timing. Include meals, transitions, morning routine, evening wind-down.`;
 
 async function generateDayPlan(prompt, userContext) {
-  const response = await axios.post(
-    'https://openrouter.ai/api/v1/chat/completions',
-    {
-      model: process.env.OPENROUTER_MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `${prompt}\n\nContext: ${JSON.stringify(userContext)}`,
-        },
-      ],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost:5173',
-        'X-Title': 'Life OS',
+  const message = await client.messages.create({
+    model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
+    max_tokens: 2048,
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: `${prompt}\n\nContext: ${JSON.stringify(userContext)}`,
       },
-    }
-  );
+    ],
+  });
 
-  let content = response.data.choices[0].message.content.trim();
+  let content = message.content[0].text.trim();
 
   // Strip markdown code fences if present
   content = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
