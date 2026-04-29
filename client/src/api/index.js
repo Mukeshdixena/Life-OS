@@ -3,6 +3,7 @@ import axios from 'axios';
 /* ── Axios Instance ──────────────────────────────────────── */
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '',
+  timeout: 60000,
 });
 
 /* ── Request Interceptor: attach Bearer token ────────────── */
@@ -108,6 +109,9 @@ export const settings = {
   },
   logHabit(data) {
     return api.post('/api/settings/habits/logs', data);
+  },
+  deleteAccount() {
+    return api.delete('/api/settings/account');
   },
 };
 

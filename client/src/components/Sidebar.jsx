@@ -7,7 +7,6 @@ import {
 
 const NAV_ITEMS = [
   { to: '/today',     Icon: Home,          label: 'Today'     },
-  { to: '/plan',      Icon: CalendarPlus,  label: 'Plan'      },
   { to: '/review',    Icon: CheckSquare,   label: 'Review'    },
   { to: '/dashboard', Icon: BarChart3,     label: 'Dashboard' },
   { to: '/history',   Icon: Clock,         label: 'History'   },

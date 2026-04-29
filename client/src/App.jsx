@@ -5,7 +5,6 @@ import { useStore } from './store/useStore';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Today from './pages/Today';
-import Plan from './pages/Plan';
 import Review from './pages/Review';
 import Dashboard from './pages/Dashboard';
 import History from './pages/History';
@@ -51,7 +50,7 @@ export default function App() {
           }
         >
           <Route path="today" element={<Today />} />
-          <Route path="plan" element={<Plan />} />
+          <Route path="plan" element={<Navigate to="/today" replace />} />
           <Route path="review" element={<Review />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="history" element={<History />} />

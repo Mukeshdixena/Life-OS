@@ -19,8 +19,13 @@ router.post('/generate', async (req, res) => {
     const blocks = await generateDayPlan(prompt, userContext);
     res.json({ blocks });
   } catch (err) {
+    const errorMsg = err.message || 'Failed to generate day plan';
     console.error('Plan generate error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to generate day plan', detail: err.message });
+    res.status(500).json({ 
+      error: 'Generation Error', 
+      message: errorMsg,
+      detail: err.response?.data?.error?.message || err.message 
+    });
   }
 });
 
@@ -54,33 +59,52 @@ router.post('/confirm', async (req, res) => {
 
     const plan = planResult.rows[0];
 
-    // Remove old blocks for this plan
-    await client.query('DELETE FROM time_blocks WHERE plan_id = $1', [plan.id]);
+    // Extract incoming block IDs to determine which ones to keep/update
+    const incomingBlockIds = blocks.filter(b => b.id).map(b => b.id);
 
-    // Insert new blocks
+    // Remove old blocks for this plan that are NOT in the incoming blocks
+    if (incomingBlockIds.length > 0) {
+      await client.query(
+        'DELETE FROM time_blocks WHERE plan_id = $1 AND id != ALL($2::int[])',
+        [plan.id, incomingBlockIds]
+      );
+    } else {
+      await client.query('DELETE FROM time_blocks WHERE plan_id = $1', [plan.id]);
+    }
+
+    // Upsert blocks
     const insertedBlocks = [];
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i];
-      const blockResult = await client.query(
-        `INSERT INTO time_blocks
-           (plan_id, user_id, title, category, start_time, end_time, planned_start, planned_end,
-            color, energy_level, is_non_negotiable, position, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $5, $6, $7, $8, $9, $10, 'pending')
-         RETURNING *`,
-        [
-          plan.id,
-          userId,
-          b.title,
-          b.category,
-          b.start_time,
-          b.end_time,
-          b.color,
-          b.energy_level,
-          b.is_non_negotiable ?? false,
-          i,
-        ]
-      );
-      insertedBlocks.push(blockResult.rows[0]);
+      if (b.id) {
+        // Update existing block
+        const blockResult = await client.query(
+          `UPDATE time_blocks
+           SET title = $1, category = $2, start_time = $3, end_time = $4,
+               color = $5, energy_level = $6, is_non_negotiable = $7, position = $8
+           WHERE id = $9 AND plan_id = $10
+           RETURNING *`,
+          [
+            b.title, b.category, b.start_time, b.end_time, b.color,
+            b.energy_level, b.is_non_negotiable ?? false, i, b.id, plan.id
+          ]
+        );
+        insertedBlocks.push(blockResult.rows[0]);
+      } else {
+        // Insert new block
+        const blockResult = await client.query(
+          `INSERT INTO time_blocks
+             (plan_id, user_id, title, category, start_time, end_time, planned_start, planned_end,
+              color, energy_level, is_non_negotiable, position, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $5, $6, $7, $8, $9, $10, 'pending')
+           RETURNING *`,
+          [
+            plan.id, userId, b.title, b.category, b.start_time, b.end_time,
+            b.color, b.energy_level, b.is_non_negotiable ?? false, i
+          ]
+        );
+        insertedBlocks.push(blockResult.rows[0]);
+      }
     }
 
     await client.query('COMMIT');

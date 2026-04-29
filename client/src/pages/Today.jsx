@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, RefreshCw, CheckCircle2, Play, Minus, ChevronRight } from 'lucide-react';
+import { AlertCircle, RefreshCw, CheckCircle2, Play, Minus, Pencil, X, Check, Sparkles } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useLiveClock } from '../hooks/useLiveClock';
 import * as api from '../api/index';
@@ -164,15 +164,19 @@ function NowPanel({ block, now, nextBlocks, onComplete }) {
 }
 
 /* ── TimelineBlock ─────────────────────────────────────────── */
-function TimelineBlock({ block, status, idx }) {
+function TimelineBlock({ block, status, idx, isEditing, onEdit, onCancel, onSave }) {
+  const [title, setTitle] = useState(block.title);
+  const [category, setCategory] = useState(block.category);
+  const [saving, setSaving] = useState(false);
+
   const hex      = block.color || catHex(block.category);
   const startMin = minFromMidnight(new Date(block.start_time));
   const endMin   = minFromMidnight(new Date(block.end_time));
   const dur      = Math.round(endMin - startMin);
   const top      = yFor(startMin);
-  const height   = Math.max(40, ((endMin - startMin) / 60) * PX_PER_HOUR - 4);
+  const height   = Math.max(isEditing ? 120 : 40, ((endMin - startMin) / 60) * PX_PER_HOUR - 4);
 
-  const cls = `tl-block ${status === 'past' ? 'past' : ''} ${status === 'active' ? 'active-block' : ''}`;
+  const cls = `tl-block ${status === 'past' ? 'past' : ''} ${status === 'active' ? 'active-block' : ''} ${isEditing ? 'editing' : ''}`;
 
   const StatusIcon =
     status === 'past'   ? <span className="tl-status done"><CheckCircle2 size={11} /></span> :
@@ -186,11 +190,57 @@ function TimelineBlock({ block, status, idx }) {
     return `${mn}m`;
   }
 
+  const handleSave = async (e) => {
+    e.stopPropagation();
+    setSaving(true);
+    try {
+      await onSave(block.id, { title, category });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className={cls} style={{ top: `${top}px`, height: `${height}px`, '--cat': hex, '--d': '0ms', zIndex: 10 }}>
+        <div className="edit-form" onClick={e => e.stopPropagation()}>
+          <input
+            autoFocus
+            className="edit-input"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Block title..."
+          />
+          <div className="edit-row">
+            <select
+              className="edit-select"
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+            >
+              {Object.keys(CAT_HEX).map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <div className="edit-actions">
+              <button className="edit-btn cancel" onClick={onCancel} disabled={saving}><X size={14} /></button>
+              <button className="edit-btn save" onClick={handleSave} disabled={saving}><Check size={14} /></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const isDone = block.status === 'done' || block.status === 'skipped' || status === 'past';
+
   return (
-    <div className={cls} style={{ top: `${top}px`, height: `${height}px`, '--cat': hex, '--d': `${idx * 30}ms` }}>
+    <div className={cls} style={{ top: `${top}px`, height: `${height}px`, '--cat': hex, '--d': `${idx * 30}ms` }} onClick={() => !isDone && onEdit(block.id)}>
       <div className="row1">
         <div className="block-title">{block.title}</div>
-        {StatusIcon}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {!isDone && <Pencil size={12} className="edit-hint" />}
+          {StatusIcon}
+        </div>
       </div>
       <div className="block-meta">
         <span className="pill-badge" style={{ '--cat': hex }}>
@@ -203,7 +253,7 @@ function TimelineBlock({ block, status, idx }) {
 }
 
 /* ── Timeline ──────────────────────────────────────────────── */
-function Timeline({ blocks, now }) {
+function Timeline({ blocks, now, editingId, onEdit, onCancel, onSave }) {
   const nowMin   = minFromMidnight(now);
   const totalH   = (TL_END_H - TL_START_H) * PX_PER_HOUR;
 
@@ -227,7 +277,18 @@ function Timeline({ blocks, now }) {
           const status =
             nowMin >= endMin   ? 'past' :
             nowMin >= startMin ? 'active' : 'future';
-          return <TimelineBlock key={b.id} block={b} status={status} idx={i} />;
+          return (
+            <TimelineBlock
+              key={b.id}
+              block={b}
+              status={status}
+              idx={i}
+              isEditing={editingId === b.id}
+              onEdit={onEdit}
+              onCancel={onCancel}
+              onSave={onSave}
+            />
+          );
         })}
         {nowMin >= TL_START_H * 60 && nowMin <= TL_END_H * 60 && (
           <div className="now-line" style={{ top: `${yFor(nowMin)}px` }}>
@@ -267,6 +328,96 @@ function CheckInModal({ block, onClose, onChoose }) {
   );
 }
 
+/* ── QuickPlanModal ──────────────────────────────────────────── */
+function QuickPlanModal({ currentBlocks, onClose, onConfirm }) {
+  const [intent, setIntent] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [newBlocks, setNewBlocks] = useState(null);
+  const [error, setError] = useState(null);
+  
+  const isReplanning = currentBlocks.length > 0;
+
+  const handleGenerate = async () => {
+    if (!intent.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const now = new Date();
+      const promptText = isReplanning 
+        ? `It is currently ${now.toLocaleTimeString()}. Plan the remaining part of my day based on this intent: ${intent}. Do not schedule anything before the current time.`
+        : `Plan my day based on this intent: ${intent}.`;
+
+      const { data } = await api.plan.generate({
+        prompt: promptText,
+        mood_score: 4, energy_score: 4, mental_state: 'focused'
+      });
+      setNewBlocks(data.blocks);
+    } catch(err) {
+      setError(err?.response?.data?.message || 'Failed to generate. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    const now = new Date();
+    const pastBlocks = isReplanning 
+      ? currentBlocks.filter(b => b.status === 'done' || b.status === 'skipped' || new Date(b.end_time) <= now)
+      : [];
+    
+    const finalBlocks = [...pastBlocks, ...newBlocks];
+    onConfirm(finalBlocks, intent);
+  };
+
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 600 }}>
+        <h3>{isReplanning ? 'Re-plan Remaining Day' : 'Plan Your Day'}</h3>
+        <p className="modal-sub">
+          {isReplanning ? 'Your completed blocks will be preserved. New blocks will be added for the rest of the day.' : 'Brain-dump your intent and we will generate a timeline for you.'}
+        </p>
+
+        {!newBlocks ? (
+          <>
+            <textarea className="textarea" style={{ marginBottom: 16 }}
+              placeholder={isReplanning ? "e.g. Next 3 hours I want to deep work on project X, then gym" : "e.g. Morning gym, deep work till 3pm, then reading"}
+              value={intent}
+              onChange={e => setIntent(e.target.value)}
+            />
+            {error && <div style={{ color: '#E0524A', marginBottom: 16 }}>{error}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleGenerate} disabled={loading || !intent.trim()}>
+                {loading ? 'Generating...' : 'Generate Blocks'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ maxHeight: '40vh', overflowY: 'auto', marginBottom: 20, background: 'var(--bg-3)', padding: 12, borderRadius: 8 }}>
+              {newBlocks.map((b, i) => (
+                <div key={i} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: i < newBlocks.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-3)' }}>
+                    {new Date(b.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </span>
+                  <span style={{ fontWeight: 500, color: 'var(--text-1)' }}>{b.title}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <button className="btn btn-outline" onClick={() => setNewBlocks(null)}>← Retry</button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleConfirm}>Confirm & Apply</button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main Page ─────────────────────────────────────────────── */
 export default function Today() {
   const navigate           = useNavigate();
@@ -280,6 +431,8 @@ export default function Today() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
   const [localCheckin, setLocalCheckin] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [showPlanModal, setShowPlanModal] = useState(false);
 
   const scrollRef = useRef(null);
 
@@ -289,13 +442,43 @@ export default function Today() {
     try {
       const res  = await api.plan.getToday();
       const data = res.data;
-      if (!data?.plan) { navigate('/plan'); return; }
-      setTodayPlan(data.plan, data.blocks || []);
+      if (data?.plan) {
+        setTodayPlan(data.plan, data.blocks || []);
+      } else {
+        setTodayPlan(null, []);
+        setShowPlanModal(true); // Auto-show if no plan
+      }
     } catch (err) {
-      if (err?.response?.status === 404) navigate('/plan');
-      else setError(err?.response?.data?.error || err.message || 'Failed to load plan.');
+      setError(err?.response?.data?.error || err.message || 'Failed to load plan.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateBlock = async (id, changes) => {
+    try {
+      const { data } = await api.plan.updateBlock(id, changes);
+      useStore.getState().updateBlock(id, data);
+      setEditingId(null);
+    } catch (err) {
+      console.error('Failed to update block:', err);
+      alert('Failed to save changes. Please try again.');
+    }
+  };
+
+  const handleConfirmPlan = async (blocks, intent) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const { data } = await api.plan.confirm({
+        date: today,
+        prompt_used: intent,
+        mood_score: 4, energy_score: 4, mental_state: 'focused',
+        blocks
+      });
+      setTodayPlan(data.plan, data.blocks);
+      setShowPlanModal(false);
+    } catch (err) {
+      alert('Failed to save plan.');
     }
   };
 
@@ -369,19 +552,31 @@ export default function Today() {
 
   return (
     <div className="page-fade" ref={scrollRef}>
-      <div className="today-head">
-        <div className="eyebrow">
-          <span className="label-eyebrow">{dayNames[today.getDay()]} · Day {dayOfYear} of 365</span>
+      <div className="today-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div className="eyebrow">
+            <span className="label-eyebrow">{dayNames[today.getDay()]} · Day {dayOfYear} of 365</span>
+          </div>
+          <h1>Today</h1>
+          <div className="sub">
+            {dateStr} — {blocks.length} blocks planned
+          </div>
         </div>
-        <h1>Today</h1>
-        <div className="sub">
-          {dateStr} — {blocks.length} blocks planned
-        </div>
+        <button className="btn btn-outline" onClick={() => setShowPlanModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Sparkles size={14} /> {blocks.length > 0 ? 'Re-plan' : 'Plan Day'}
+        </button>
       </div>
 
       <div className="today-grid">
-        <div>
-          <Timeline blocks={blocks} now={now} />
+        <div onClick={() => editingId && setEditingId(null)}>
+          <Timeline
+            blocks={blocks}
+            now={now}
+            editingId={editingId}
+            onEdit={setEditingId}
+            onCancel={() => setEditingId(null)}
+            onSave={handleUpdateBlock}
+          />
         </div>
         <NowPanel
           block={activeBlock}
@@ -396,6 +591,14 @@ export default function Today() {
           block={activeBlock}
           onClose={() => { dismissCheckin(); setLocalCheckin(false); }}
           onChoose={() => { dismissCheckin(); setLocalCheckin(false); }}
+        />
+      )}
+
+      {showPlanModal && (
+        <QuickPlanModal
+          currentBlocks={blocks}
+          onClose={() => setShowPlanModal(false)}
+          onConfirm={handleConfirmPlan}
         />
       )}
     </div>

@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  name         String
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  settings     Json          @default("{}")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  dailyPlans   DailyPlan[]
+  timeBlocks   TimeBlock[]
+  checkins     Checkin[]
+  dailyReviews DailyReview[]
+  habits       Habit[]
+  habitLogs    HabitLog[]
+
+  @@map("users")
+}
+
+model DailyPlan {
+  id           Int           @id @default(autoincrement())
+  userId       Int           @map("user_id")
+  date         DateTime      @db.Date
+  promptUsed   String?       @map("prompt_used")
+  moodScore    Int?          @map("mood_score")
+  energyScore  Int?          @map("energy_score")
+  mentalState  String?       @map("mental_state")
+  confirmedAt  DateTime?     @map("confirmed_at") @db.Timestamptz
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timeBlocks   TimeBlock[]
+  dailyReviews DailyReview[]
+
+  @@unique([userId, date])
+  @@map("daily_plans")
+}
+
+model TimeBlock {
+  id               Int       @id @default(autoincrement())
+  planId           Int       @map("plan_id")
+  userId           Int       @map("user_id")
+  title            String
+  category         String    @default("personal")
+  startTime        DateTime  @map("start_time") @db.Timestamptz
+  endTime          DateTime  @map("end_time") @db.Timestamptz
+  plannedStart     DateTime  @map("planned_start") @db.Timestamptz
+  plannedEnd       DateTime  @map("planned_end") @db.Timestamptz
+  color            String    @default("#6B7280")
+  energyLevel      String    @default("medium") @map("energy_level")
+  isNonNegotiable  Boolean   @default(false) @map("is_non_negotiable")
+  position         Int       @default(0)
+  status           String    @default("pending")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  plan             DailyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkins         Checkin[]
+
+  @@map("time_blocks")
+}
+
+model Checkin {
+  id                Int       @id @default(autoincrement())
+  blockId           Int       @map("block_id")
+  userId            Int       @map("user_id")
+  outcome           String
+  actualEnd         DateTime? @map("actual_end") @db.Timestamptz
+  extraMinutes      Int       @default(0) @map("extra_minutes")
+  notes             String?
+  alternateActivity String?   @map("alternate_activity")
+  timeRoi           String?   @map("time_roi")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  block             TimeBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("checkins")
+}
+
+model DailyReview {
+  id                 Int       @id @default(autoincrement())
+  planId             Int       @map("plan_id")
+  userId             Int       @map("user_id")
+  completionRate     Decimal?  @map("completion_rate") @db.Decimal(5, 2)
+  energyDrainNotes   String?   @map("energy_drain_notes")
+  wins               String?
+  improvements       String?
+  overallRating      Int?      @map("overall_rating")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  plan               DailyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("daily_reviews")
+}
+
+model Habit {
+  id        Int        @id @default(autoincrement())
+  userId    Int        @map("user_id")
+  name      String
+  category  String     @default("personal")
+  color     String     @default("#6B7280")
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habitLogs HabitLog[]
+
+  @@map("habits")
+}
+
+model HabitLog {
+  id        Int      @id @default(autoincrement())
+  habitId   Int      @map("habit_id")
+  userId    Int      @map("user_id")
+  date      DateTime @db.Date
+  completed Boolean  @default(false)
+
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@map("habit_logs")
+}
