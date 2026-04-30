@@ -180,11 +180,11 @@ export default function History() {
   while (calDays.length % 7 !== 0) calDays.push(null);
 
   return (
-    <div className="page-fade">
+    <div className="page-pad" style={{ overflowY: 'auto', flex: 1 }}>
       <div className="dash-head">
         <div>
           <div className="label-eyebrow" style={{ marginBottom: 4 }}>Past days</div>
-          <h1>History</h1>
+          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 36, margin: 0 }}>History</h1>
         </div>
       </div>
 
@@ -198,7 +198,7 @@ export default function History() {
             </div>
           </div>
 
-          <div className="cal-grid">
+          <div className="hist-cal-grid">
             {['M','T','W','T','F','S','S'].map((d, i) => (
               <div key={i} className="cal-day-h">{d}</div>
             ))}

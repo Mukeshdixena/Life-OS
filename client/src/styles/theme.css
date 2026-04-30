@@ -1405,7 +1405,15 @@ html, body {
 .habit-row .pct { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text-2); }
 
 /* ============ HISTORY ============ */
+.dash-head { margin-bottom: 28px; }
 .hist-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; }
+
+/* 7-column monthly calendar grid (History page) — avoids conflict with cal-grid (Today) */
+.hist-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
 .cal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .cal-head h2 { font-family: 'DM Serif Display', serif; font-size: 26px; margin: 0; }
 .cal-nav { display: flex; gap: 6px; }

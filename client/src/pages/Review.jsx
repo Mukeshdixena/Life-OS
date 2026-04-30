@@ -45,7 +45,7 @@ export default function Review() {
   return (
     <div
       className="page page-transition"
-      style={{ maxWidth: 600, margin: '0 auto' }}
+      style={{ maxWidth: 720, margin: '0 auto', width: '100%' }}
     >
       <h1 className="section-title">Day Review</h1>
       <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
@@ -54,16 +54,18 @@ export default function Review() {
 
       {/* Stats summary */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
-          <div>
+        <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', gap: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
             <div className="stat-value">{blocksCount}</div>
             <div className="stat-label">Blocks planned</div>
           </div>
-          <div>
+          <div style={{ width: '1px', background: 'var(--border)', alignSelf: 'stretch' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
             <div className="stat-value">{todayPlan?.plan?.mood_score ?? '–'}</div>
             <div className="stat-label">Mood score</div>
           </div>
-          <div>
+          <div style={{ width: '1px', background: 'var(--border)', alignSelf: 'stretch' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
             <div className="stat-value">{todayPlan?.plan?.energy_score ?? '–'}</div>
             <div className="stat-label">Energy score</div>
           </div>
