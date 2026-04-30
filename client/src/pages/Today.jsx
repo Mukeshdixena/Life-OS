@@ -1,606 +1,460 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, RefreshCw, CheckCircle2, Play, Minus, Pencil, X, Check, Sparkles } from 'lucide-react';
+import { 
+  AlertCircle, RefreshCw, CheckCircle2, Play, 
+  Minus, Pencil, X, Check, Sparkles, ChevronLeft, 
+  ChevronRight, Clock, Target, Zap, Trash2, Calendar
+} from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useLiveClock } from '../hooks/useLiveClock';
 import * as api from '../api/index';
 
 /* ── Constants ─────────────────────────────────────────────── */
-const PX_PER_HOUR = 76;
+const PX_PER_HOUR = 80;
 const TL_START_H  = 6;   // 6am
 const TL_END_H    = 23;  // 11pm
 
-function minFromMidnight(date) {
-  return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
-}
-function yFor(min) {
-  return ((min - TL_START_H * 60) / 60) * PX_PER_HOUR;
-}
-function fmtMin(min) {
-  const h = Math.floor(min / 60) % 24;
-  const m = Math.floor(min % 60);
-  const ap = h >= 12 ? 'pm' : 'am';
-  const h12 = ((h + 11) % 12) + 1;
-  return `${h12}:${String(m).padStart(2, '0')}${ap}`;
-}
-function pad2(n) { return String(n).padStart(2, '0'); }
-
-/* ── Category hex colors ────────────────────────────────────── */
 const CAT_HEX = {
   work: '#3B82F6', health: '#22C55E', learning: '#A855F7',
   relationships: '#F97316', admin: '#6B7280', personal: '#EC4899', sleep: '#1E3A5F',
 };
 function catHex(c) { return CAT_HEX[c] || '#6B7280'; }
 
-/* ── CountdownRing ─────────────────────────────────────────── */
-function CountdownRing({ remaining, total, color }) {
-  const size = 220, stroke = 10;
-  const r = (size - stroke) / 2 - 8;
-  const circ = 2 * Math.PI * r;
-  const pct  = Math.max(0, Math.min(1, remaining / total));
-
-  const ticks = [];
-  for (let i = 0; i < 60; i++) {
-    const angle = (i / 60) * Math.PI * 2;
-    const isMajor = i % 5 === 0;
-    const r1 = r - 12, r2 = isMajor ? r - 4 : r - 8;
-    const cx  = size / 2 + Math.cos(angle) * r1;
-    const cy  = size / 2 + Math.sin(angle) * r1;
-    const cx2 = size / 2 + Math.cos(angle) * r2;
-    const cy2 = size / 2 + Math.sin(angle) * r2;
-    ticks.push(
-      <line key={i} x1={cx} y1={cy} x2={cx2} y2={cy2}
-        className="ring-tick" strokeWidth={isMajor ? 1.5 : 1} />
-    );
-  }
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`}>
-      {ticks}
-      <circle cx={size/2} cy={size/2} r={r} fill="none" strokeWidth={stroke} className="ring-bg" />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" strokeWidth={stroke}
-        className="ring-fg" stroke={color}
-        strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
-        strokeLinecap="round" />
-    </svg>
-  );
+/* ── Helpers ────────────────────────────────────────────────── */
+function minFromMidnight(date) {
+  const d = new Date(date);
+  return d.getHours() * 60 + d.getMinutes();
+}
+function yFor(min) { return ((min - TL_START_H * 60) / 60) * PX_PER_HOUR; }
+function fmtTime(min) {
+  const h = Math.floor(min / 60) % 24;
+  const m = Math.floor(min % 60);
+  const ap = h >= 12 ? 'pm' : 'am';
+  const h12 = ((h + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2,'0')}${ap}`;
 }
 
-/* ── NowPanel ──────────────────────────────────────────────── */
-function NowPanel({ block, now, nextBlocks, onComplete }) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
+// Logic for side-by-side overlapping blocks (Cluster-aware)
+function layoutBlocks(blocks) {
+  if (!blocks.length) return [];
 
-  if (!block) {
-    return (
-      <div className="now-panel">
-        <div className="now-card" style={{ '--cat': '#6B7280' }}>
-          <div className="now-header">
-            <span className="now-eyebrow">Now</span>
-            <h2>Between blocks</h2>
-            <div className="muted" style={{ fontSize: 13 }}>No active block — take a breath.</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const sorted = [...blocks].sort((a, b) => {
+    const sA = minFromMidnight(a.start_time);
+    const sB = minFromMidnight(b.start_time);
+    if (sA !== sB) return sA - sB;
+    return minFromMidnight(b.end_time) - minFromMidnight(a.end_time);
+  });
 
-  const hex       = block.color || catHex(block.category);
-  const startMs   = new Date(block.start_time).getTime();
-  const endMs     = new Date(block.end_time).getTime();
-  const totalSec  = Math.max(1, (endMs - startMs) / 1000);
-  const remSec    = Math.max(0, (endMs - now.getTime()) / 1000);
-  const ratio     = remSec / totalSec;
-  const elPct     = Math.min(100, ((totalSec - remSec) / totalSec) * 100);
+  const clusters = [];
+  let lastClusterEnd = -1;
 
-  let ringColor = '#22C55E';
-  if (ratio < 0.5) ringColor = '#E5A93A';
-  if (ratio < 0.2) ringColor = '#E0524A';
+  // Group into clusters of overlapping blocks
+  sorted.forEach(block => {
+    const start = minFromMidnight(block.start_time);
+    const end = minFromMidnight(block.end_time);
+    if (start >= lastClusterEnd) {
+      clusters.push([]);
+    }
+    clusters[clusters.length - 1].push(block);
+    lastClusterEnd = Math.max(lastClusterEnd, end);
+  });
 
-  const hh = Math.floor(remSec / 3600);
-  const mm = Math.floor((remSec % 3600) / 60);
-  const ss = Math.floor(remSec % 60);
-  const tt = hh > 0
-    ? `${hh}:${pad2(mm)}:${pad2(ss)}`
-    : `${pad2(mm)}:${pad2(ss)}`;
+  // For each cluster, calculate column layout
+  clusters.forEach(cluster => {
+    const columns = [];
+    cluster.forEach(block => {
+      const start = minFromMidnight(block.start_time);
+      let placed = false;
+      for (let i = 0; i < columns.length; i++) {
+        const lastInCol = columns[i][columns[i].length - 1];
+        if (minFromMidnight(lastInCol.end_time) <= start) {
+          columns[i].push(block);
+          block.col = i;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        block.col = columns.length;
+        columns.push([block]);
+      }
+    });
 
-  return (
-    <div className="now-panel">
-      <div className="now-card" style={{ '--cat': hex }}>
-        <div className="now-header">
-          <span className="now-eyebrow">Now</span>
-          <h2>{block.title}</h2>
-          {block.category && (
-            <span className="pill-badge" style={{ '--cat': hex, marginTop: 4 }}>
-              <span className="dot" />
-              {block.category}
-            </span>
-          )}
-        </div>
+    const totalCols = columns.length;
+    cluster.forEach(block => {
+      block.width = 100 / totalCols;
+      block.left = (block.col / totalCols) * 100;
+    });
+  });
 
-        <div className="timer-wrap">
-          <CountdownRing remaining={remSec} total={totalSec} color={ringColor} />
-          <div className="timer-center">
-            <div>
-              <div className="timer-time" style={{ color: ringColor }}>{tt}</div>
-              <div className="timer-sub">REMAINING</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="thin-progress">
-          <div className="fill" style={{ width: `${elPct}%`, background: ringColor }} />
-        </div>
-
-        <div className="now-actions">
-          <button className="btn btn-outline" onClick={onComplete}>Complete Early</button>
-          <button className="btn btn-outline">Need More Time</button>
-        </div>
-      </div>
-
-      {nextBlocks.length > 0 && (
-        <div className="up-next">
-          <div className="head">
-            <span className="label-eyebrow">Coming Up</span>
-            <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'JetBrains Mono, monospace' }}>NEXT {nextBlocks.length}</span>
-          </div>
-          {nextBlocks.map(b => {
-            const c = b.color || catHex(b.category);
-            const startMin = minFromMidnight(new Date(b.start_time));
-            return (
-              <div key={b.id} className="row" style={{ '--cat': c }}>
-                <span className="dot" />
-                <div className="name">{b.title}</div>
-                <div className="when">{fmtMin(startMin)}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+  return sorted;
 }
 
-/* ── TimelineBlock ─────────────────────────────────────────── */
-function TimelineBlock({ block, status, idx, isEditing, onEdit, onCancel, onSave }) {
-  const [title, setTitle] = useState(block.title);
-  const [category, setCategory] = useState(block.category);
+/* ── Components ─────────────────────────────────────────────── */
+
+function BlockPopover({ block, position, onClose, onSave, onDelete }) {
+  const [title, setTitle] = useState(block?.title || '');
+  const [category, setCategory] = useState(block?.category || 'work');
+  const [startTime, setStartTime] = useState(block ? new Date(block.start_time).toTimeString().slice(0,5) : (position.startTime || '09:00'));
+  const [endTime, setEndTime] = useState(block ? new Date(block.end_time).toTimeString().slice(0,5) : (position.endTime || '10:00'));
   const [saving, setSaving] = useState(false);
 
-  const hex      = block.color || catHex(block.category);
-  const startMin = minFromMidnight(new Date(block.start_time));
-  const endMin   = minFromMidnight(new Date(block.end_time));
-  const dur      = Math.round(endMin - startMin);
-  const top      = yFor(startMin);
-  const height   = Math.max(isEditing ? 120 : 40, ((endMin - startMin) / 60) * PX_PER_HOUR - 4);
-
-  const cls = `tl-block ${status === 'past' ? 'past' : ''} ${status === 'active' ? 'active-block' : ''} ${isEditing ? 'editing' : ''}`;
-
-  const StatusIcon =
-    status === 'past'   ? <span className="tl-status done"><CheckCircle2 size={11} /></span> :
-    status === 'active' ? <span className="tl-status active-s"><Play size={9} /></span> :
-                          <span className="tl-status pending"><Minus size={11} /></span>;
-
-  function durLabel(m) {
-    const h = Math.floor(m / 60), mn = m % 60;
-    if (h && mn) return `${h}h ${mn}m`;
-    if (h) return `${h}h`;
-    return `${mn}m`;
-  }
-
-  const handleSave = async (e) => {
-    e.stopPropagation();
+  const handleSubmit = async () => {
     setSaving(true);
-    try {
-      await onSave(block.id, { title, category });
-    } finally {
-      setSaving(false);
-    }
+    const datePrefix = new Date().toISOString().split('T')[0];
+    const data = {
+      title,
+      category,
+      start_time: `${datePrefix}T${startTime}:00Z`,
+      end_time: `${datePrefix}T${endTime}:00Z`,
+    };
+    await onSave(block?.id, data);
+    setSaving(false);
   };
 
-  if (isEditing) {
-    return (
-      <div className={cls} style={{ top: `${top}px`, height: `${height}px`, '--cat': hex, '--d': '0ms', zIndex: 10 }}>
-        <div className="edit-form" onClick={e => e.stopPropagation()}>
-          <input
-            autoFocus
-            className="edit-input"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="Block title..."
-          />
-          <div className="edit-row">
-            <select
-              className="edit-select"
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-            >
-              {Object.keys(CAT_HEX).map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <div className="edit-actions">
-              <button className="edit-btn cancel" onClick={onCancel} disabled={saving}><X size={14} /></button>
-              <button className="edit-btn save" onClick={handleSave} disabled={saving}><Check size={14} /></button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const isDone = block.status === 'done' || block.status === 'skipped' || status === 'past';
-
   return (
-    <div className={cls} style={{ top: `${top}px`, height: `${height}px`, '--cat': hex, '--d': `${idx * 30}ms` }} onClick={() => !isDone && onEdit(block.id)}>
-      <div className="row1">
-        <div className="block-title">{block.title}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {!isDone && <Pencil size={12} className="edit-hint" />}
-          {StatusIcon}
+    <div className="block-popover" style={{ top: position.y, left: position.x }}>
+      <div className="popover-header">
+        <h3>{block ? 'Edit Block' : 'New Block'}</h3>
+        <button className="btn btn-ghost" onClick={onClose}><X size={16}/></button>
+      </div>
+      
+      <div className="popover-field">
+        <label>Title</label>
+        <input className="popover-input" value={title} onChange={e=>setTitle(e.target.value)} autoFocus />
+      </div>
+
+      <div className="popover-field">
+        <label>Category</label>
+        <select className="popover-input" value={category} onChange={e=>setCategory(e.target.value)}>
+          {Object.keys(CAT_HEX).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12 }}>
+        <div className="popover-field" style={{ flex: 1 }}>
+          <label>Start</label>
+          <input type="time" className="popover-input" value={startTime} onChange={e=>setStartTime(e.target.value)} />
+        </div>
+        <div className="popover-field" style={{ flex: 1 }}>
+          <label>End</label>
+          <input type="time" className="popover-input" value={endTime} onChange={e=>setEndTime(e.target.value)} />
         </div>
       </div>
-      <div className="block-meta">
-        <span className="pill-badge" style={{ '--cat': hex }}>
-          <span className="dot" />{block.category || 'task'}
-        </span>
-        <span className="block-dur">{fmtMin(startMin)} · {durLabel(dur)}</span>
+
+      <div className="popover-actions">
+        {block && <button className="btn btn-ghost" onClick={()=>onDelete(block.id)} style={{ color: '#E0524A', marginRight: 'auto' }}><Trash2 size={16}/></button>}
+        <button className="btn btn-primary" onClick={handleSubmit} disabled={saving || !title.trim()}>
+          {saving ? 'Saving...' : 'Save Block'}
+        </button>
       </div>
     </div>
   );
 }
 
-/* ── Timeline ──────────────────────────────────────────────── */
-function Timeline({ blocks, now, editingId, onEdit, onCancel, onSave }) {
-  const nowMin   = minFromMidnight(now);
-  const totalH   = (TL_END_H - TL_START_H) * PX_PER_HOUR;
+function MiniCalendar() {
+  const now = new Date();
+  const [viewDate, setViewDate] = useState(new Date());
+  const monthName = viewDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+  const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
 
-  const ticks = [];
-  for (let m = TL_START_H * 60; m <= TL_END_H * 60; m += 30) {
-    const isHour = m % 60 === 0;
-    ticks.push(
-      <div key={m} className={`timeline-tick${isHour ? ' hour' : ''}`} style={{ top: `${yFor(m)}px` }}>
-        {isHour ? fmtMin(m) : ''}
-      </div>
-    );
+  const dates = [];
+  for (let i = 0; i < firstDay; i++) dates.push({ d: null });
+  for (let i = 1; i <= daysInMonth; i++) {
+    const isToday = i === now.getDate() && viewDate.getMonth() === now.getMonth() && viewDate.getFullYear() === now.getFullYear();
+    dates.push({ d: i, today: isToday });
   }
 
   return (
-    <div className="timeline" style={{ minHeight: `${totalH + 24}px` }}>
-      <div className="timeline-axis" style={{ height: `${totalH}px` }}>{ticks}</div>
-      <div className="timeline-track" style={{ height: `${totalH}px` }}>
-        {blocks.map((b, i) => {
-          const startMin = minFromMidnight(new Date(b.start_time));
-          const endMin   = minFromMidnight(new Date(b.end_time));
-          const status =
-            nowMin >= endMin   ? 'past' :
-            nowMin >= startMin ? 'active' : 'future';
-          return (
-            <TimelineBlock
-              key={b.id}
-              block={b}
-              status={status}
-              idx={i}
-              isEditing={editingId === b.id}
-              onEdit={onEdit}
-              onCancel={onCancel}
-              onSave={onSave}
-            />
-          );
-        })}
-        {nowMin >= TL_START_H * 60 && nowMin <= TL_END_H * 60 && (
-          <div className="now-line" style={{ top: `${yFor(nowMin)}px` }}>
-            <span className="now-label">{fmtMin(nowMin)}</span>
-          </div>
-        )}
+    <div className="mini-cal">
+      <div className="mini-cal-header">
+        <span>{monthName}</span>
+        <div style={{ display: 'flex', gap: 2 }}>
+          <button className="btn btn-ghost" style={{ padding: 4 }} onClick={()=>setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))}><ChevronLeft size={14}/></button>
+          <button className="btn btn-ghost" style={{ padding: 4 }} onClick={()=>setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))}><ChevronRight size={14}/></button>
+        </div>
+      </div>
+      <div className="mini-cal-grid">
+        {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} className="mini-cal-day-label">{d}</div>)}
+        {dates.map((dt, i) => (dt.d ? <div key={i} className={`mini-cal-date ${dt.today ? 'today' : ''}`}>{dt.d}</div> : <div key={i}/>))}
       </div>
     </div>
   );
 }
 
-/* ── CheckInModal ──────────────────────────────────────────── */
-function CheckInModal({ block, onClose, onChoose }) {
-  if (!block) return null;
-  const opts = [
-    { id: 'done',  icon: '✅', label: 'Done — move to next',    desc: 'Mark complete and start the next block',      tone: '#22C55E' },
-    { id: 'more',  icon: '⏳', label: 'Need more time',         desc: 'Extend by 15, 30, or 45 minutes',             tone: '#E5A93A' },
-    { id: 'else',  icon: '🔀', label: 'I did something else',   desc: 'Log what you actually worked on',             tone: '#3B82F6' },
-    { id: 'skip',  icon: '⏭',  label: 'Skip this block',        desc: 'Move on without logging time',               tone: '#9E9890' },
-  ];
+function CountdownRing({ remaining, total, color }) {
+  const size = 180, stroke = 8, r = (size - stroke) / 2 - 4;
+  const circ = 2 * Math.PI * r, pct = Math.max(0, Math.min(1, remaining / total));
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <h3>Block complete</h3>
-        <div className="modal-sub">{block.title}</div>
-        {opts.map(o => (
-          <button key={o.id} className="checkin-opt" style={{ '--tone': o.tone }} onClick={() => onChoose(o.id)}>
-            <span className="ic" style={{ fontSize: 20 }}>{o.icon}</span>
-            <div>
-              <div className="lbl">{o.label}</div>
-              <div className="desc">{o.desc}</div>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ── QuickPlanModal ──────────────────────────────────────────── */
-function QuickPlanModal({ currentBlocks, onClose, onConfirm }) {
-  const [intent, setIntent] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [newBlocks, setNewBlocks] = useState(null);
-  const [error, setError] = useState(null);
-  
-  const isReplanning = currentBlocks.length > 0;
-
-  const handleGenerate = async () => {
-    if (!intent.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const now = new Date();
-      const promptText = isReplanning 
-        ? `It is currently ${now.toLocaleTimeString()}. Plan the remaining part of my day based on this intent: ${intent}. Do not schedule anything before the current time.`
-        : `Plan my day based on this intent: ${intent}.`;
-
-      const { data } = await api.plan.generate({
-        prompt: promptText,
-        mood_score: 4, energy_score: 4, mental_state: 'focused'
-      });
-      setNewBlocks(data.blocks);
-    } catch(err) {
-      setError(err?.response?.data?.message || 'Failed to generate. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleConfirm = () => {
-    const now = new Date();
-    const pastBlocks = isReplanning 
-      ? currentBlocks.filter(b => b.status === 'done' || b.status === 'skipped' || new Date(b.end_time) <= now)
-      : [];
-    
-    const finalBlocks = [...pastBlocks, ...newBlocks];
-    onConfirm(finalBlocks, intent);
-  };
-
-  return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 600 }}>
-        <h3>{isReplanning ? 'Re-plan Remaining Day' : 'Plan Your Day'}</h3>
-        <p className="modal-sub">
-          {isReplanning ? 'Your completed blocks will be preserved. New blocks will be added for the rest of the day.' : 'Brain-dump your intent and we will generate a timeline for you.'}
-        </p>
-
-        {!newBlocks ? (
-          <>
-            <textarea className="textarea" style={{ marginBottom: 16 }}
-              placeholder={isReplanning ? "e.g. Next 3 hours I want to deep work on project X, then gym" : "e.g. Morning gym, deep work till 3pm, then reading"}
-              value={intent}
-              onChange={e => setIntent(e.target.value)}
-            />
-            {error && <div style={{ color: '#E0524A', marginBottom: 16 }}>{error}</div>}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleGenerate} disabled={loading || !intent.trim()}>
-                {loading ? 'Generating...' : 'Generate Blocks'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={{ maxHeight: '40vh', overflowY: 'auto', marginBottom: 20, background: 'var(--bg-3)', padding: 12, borderRadius: 8 }}>
-              {newBlocks.map((b, i) => (
-                <div key={i} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: i < newBlocks.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-3)' }}>
-                    {new Date(b.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </span>
-                  <span style={{ fontWeight: 500, color: 'var(--text-1)' }}>{b.title}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <button className="btn btn-outline" onClick={() => setNewBlocks(null)}>← Retry</button>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={handleConfirm}>Confirm & Apply</button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} opacity="0.3" />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" strokeWidth={stroke} stroke={color} strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)} strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`} style={{ transition: 'stroke-dashoffset 1s linear' }} />
+    </svg>
   );
 }
 
 /* ── Main Page ─────────────────────────────────────────────── */
 export default function Today() {
-  const navigate           = useNavigate();
-  const { now }            = useLiveClock();
-  const todayPlan          = useStore((s) => s.todayPlan);
-  const setTodayPlan       = useStore((s) => s.setTodayPlan);
-  const triggerCheckin     = useStore((s) => s.triggerCheckin);
-  const showCheckinModal   = useStore((s) => s.showCheckinModal);
-  const dismissCheckin     = useStore((s) => s.dismissCheckin);
+  const navigate = useNavigate();
+  const { now } = useLiveClock();
+  const todayPlan = useStore(s => s.todayPlan);
+  const setTodayPlan = useStore(s => s.setTodayPlan);
+  const triggerCheckin = useStore(s => s.triggerCheckin);
+  const showCheckinModal = useStore(s => s.showCheckinModal);
+  const dismissCheckin = useStore(s => s.dismissCheckin);
 
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
-  const [localCheckin, setLocalCheckin] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [showPlanModal, setShowPlanModal] = useState(false);
-
-  const scrollRef = useRef(null);
+  const [popover, setPopover] = useState(null); 
+  const [dragInfo, setDragInfo] = useState(null); // { mode, startMin, endMin, blockId, offset }
+  const gridRef = useRef(null);
+  const isDragging = useRef(false);
 
   const loadPlan = async () => {
     setLoading(true);
-    setError(null);
     try {
-      const res  = await api.plan.getToday();
-      const data = res.data;
-      if (data?.plan) {
-        setTodayPlan(data.plan, data.blocks || []);
-      } else {
-        setTodayPlan(null, []);
-        setShowPlanModal(true); // Auto-show if no plan
-      }
-    } catch (err) {
-      setError(err?.response?.data?.error || err.message || 'Failed to load plan.');
-    } finally {
-      setLoading(false);
-    }
+      const res = await api.plan.getToday();
+      if (res.data?.plan) setTodayPlan(res.data.plan, res.data.blocks || []);
+      else setTodayPlan(null, []);
+    } finally { setLoading(false); }
   };
 
-  const handleUpdateBlock = async (id, changes) => {
-    try {
-      const { data } = await api.plan.updateBlock(id, changes);
-      useStore.getState().updateBlock(id, data);
-      setEditingId(null);
-    } catch (err) {
-      console.error('Failed to update block:', err);
-      alert('Failed to save changes. Please try again.');
-    }
-  };
+  useEffect(() => { loadPlan(); }, []);
 
-  const handleConfirmPlan = async (blocks, intent) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const { data } = await api.plan.confirm({
-        date: today,
-        prompt_used: intent,
-        mood_score: 4, energy_score: 4, mental_state: 'focused',
-        blocks
-      });
-      setTodayPlan(data.plan, data.blocks);
-      setShowPlanModal(false);
-    } catch (err) {
-      alert('Failed to save plan.');
-    }
-  };
+  const blocks = useMemo(() => {
+    const raw = todayPlan?.blocks || [];
+    const filtered = raw.filter(b => b.status !== 'skipped');
+    return layoutBlocks(filtered);
+  }, [todayPlan?.blocks]);
+  const nowMin = minFromMidnight(now);
 
-  useEffect(() => { loadPlan(); }, []); // eslint-disable-line
-
-  const blocks = todayPlan?.blocks || [];
-
-  // Active block
   const activeBlock = blocks.find(b => {
-    const s = new Date(b.start_time), e = new Date(b.end_time);
-    return now >= s && now < e && b.status !== 'done' && b.status !== 'skipped';
+    const s = minFromMidnight(b.start_time), e = minFromMidnight(b.end_time);
+    return nowMin >= s && nowMin < e && b.status !== 'done';
   });
 
-  // Up next (3)
-  const nextBlocks = blocks
-    .filter(b => new Date(b.start_time) > now && b.status !== 'done' && b.status !== 'skipped')
-    .sort((a, b2) => new Date(a.start_time) - new Date(b2.start_time))
-    .slice(0, 3);
+  const handleMouseDown = (e, block = null, mode = 'create') => {
+    e.stopPropagation();
+    const rect = gridRef.current.getBoundingClientRect();
+    const y = e.clientY - rect.top + gridRef.current.scrollTop;
+    const min = Math.round((y / PX_PER_HOUR) * 4) * 15 + TL_START_H * 60;
 
-  // Auto check-in on block end
-  useEffect(() => {
-    if (!blocks.length || showCheckinModal) return;
-    const justEnded = blocks.find(b => {
-      const end = new Date(b.end_time), grace = new Date(end.getTime() + 5 * 60000);
-      return now >= end && now <= grace && (b.status === 'pending' || b.status === 'active');
-    });
-    if (justEnded) triggerCheckin(justEnded);
-  }, [now]); // eslint-disable-line
-
-  // Scroll to current time on load
-  useEffect(() => {
-    if (!loading && scrollRef.current) {
-      const target = yFor(minFromMidnight(now)) - 200;
-      scrollRef.current.closest('.main-scroll')?.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+    if (mode === 'create') {
+      // Allow clicks on the container itself OR the background hour rows
+      const isGridBackground = e.target.classList.contains('cal-slots-col') || e.target.classList.contains('cal-hour-row');
+      if (!isGridBackground) return;
+      setDragInfo({ mode: 'create', startMin: min, endMin: min + 15 });
+    } else if (mode === 'move') {
+      const blockStart = minFromMidnight(block.start_time);
+      setDragInfo({ mode: 'move', blockId: block.id, startMin: blockStart, endMin: minFromMidnight(block.end_time), offset: min - blockStart });
+    } else if (mode === 'resize') {
+      setDragInfo({ mode: 'resize', blockId: block.id, startMin: minFromMidnight(block.start_time), endMin: minFromMidnight(block.end_time) });
     }
-  }, [loading]); // eslint-disable-line
+    
+    isDragging.current = true;
+  };
 
-  if (loading) {
-    return (
-      <div className="page-fade">
-        <div className="today-head">
-          <div className="skeleton" style={{ width: 120, height: 14, marginBottom: 8 }} />
-          <div className="skeleton" style={{ width: 200, height: 44, marginBottom: 6 }} />
-          <div className="skeleton" style={{ width: 320, height: 16 }} />
-        </div>
-        <div className="today-grid">
-          <div className="skeleton" style={{ height: 600, borderRadius: 12 }} />
-          <div className="skeleton" style={{ height: 400, borderRadius: 18 }} />
-        </div>
-      </div>
-    );
+  const handleMouseMove = (e) => {
+    if (!isDragging.current || !dragInfo) return;
+    const rect = gridRef.current.getBoundingClientRect();
+    const y = e.clientY - rect.top + gridRef.current.scrollTop;
+    const currentMin = Math.round((y / PX_PER_HOUR) * 4) * 15 + TL_START_H * 60;
+
+    if (dragInfo.mode === 'create') {
+      if (currentMin > dragInfo.startMin) {
+        setDragInfo({ ...dragInfo, endMin: currentMin });
+      }
+    } else if (dragInfo.mode === 'move') {
+      const duration = dragInfo.endMin - dragInfo.startMin;
+      const newStart = currentMin - dragInfo.offset;
+      setDragInfo({ ...dragInfo, startMin: newStart, endMin: newStart + duration });
+    } else if (dragInfo.mode === 'resize') {
+      if (currentMin > dragInfo.startMin) {
+        setDragInfo({ ...dragInfo, endMin: currentMin });
+      }
+    }
+  };
+
+  const handleMouseUp = async (e) => {
+    if (!isDragging.current || !dragInfo) return;
+    isDragging.current = false;
+    
+    const { mode, startMin, endMin, blockId } = dragInfo;
+    setDragInfo(null);
+
+    if (mode === 'create') {
+      const end = Math.max(startMin + 15, endMin);
+      setPopover({ 
+        block: null, x: e.clientX, y: e.clientY, 
+        startTime: fmtTime24(startMin), endTime: fmtTime24(end) 
+      });
+    } else {
+      const datePrefix = new Date().toISOString().split('T')[0];
+      const data = {
+        start_time: `${datePrefix}T${fmtTime24(startMin)}:00Z`,
+        end_time: `${datePrefix}T${fmtTime24(endMin)}:00Z`,
+      };
+      await handleSaveBlock(blockId, data);
+    }
+  };
+
+  function fmtTime24(min) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   }
 
-  if (error) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 16 }}>
-        <AlertCircle size={40} color="#E0524A" />
-        <p style={{ color: 'var(--text-2)', textAlign: 'center', maxWidth: 360 }}>{error}</p>
-        <button className="btn btn-outline" onClick={loadPlan} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <RefreshCw size={15} /> Retry
-        </button>
-      </div>
-    );
-  }
+  const handleSaveBlock = async (id, data) => {
+    try {
+      if (id) {
+        const res = await api.plan.updateBlock(id, data);
+        useStore.getState().updateBlock(id, res.data);
+      } else {
+        const res = await api.plan.createBlock(data);
+        // Refresh full plan to ensure layout is recalculated with new block
+        await loadPlan();
+      }
+      setPopover(null);
+    } catch (err) { 
+      console.error(err);
+      alert('Error saving block'); 
+    }
+  };
 
-  const today     = now;
-  const dayNames  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const monNames  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const dateStr   = `${dayNames[today.getDay()]}, ${monNames[today.getMonth()]} ${today.getDate()}`;
-  const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 86400000);
+  const handleDeleteBlock = async (id) => {
+    if (!window.confirm('Delete this block?')) return;
+    try {
+      // Assuming a delete endpoint exists or using update status
+      await api.plan.updateBlock(id, { status: 'skipped' }); 
+      useStore.getState().updateBlock(id, { ...activeBlock, status: 'skipped' });
+      await loadPlan();
+      setPopover(null);
+    } catch (err) { alert('Error deleting block'); }
+  };
+
+  const handleExtend = async () => {
+    if (!activeBlock) return;
+    const newEnd = new Date(new Date(activeBlock.end_time).getTime() + 15 * 60000);
+    await handleSaveBlock(activeBlock.id, { end_time: newEnd.toISOString() });
+  };
+
+  useEffect(() => {
+    if (!loading && gridRef.current) {
+      gridRef.current.scrollTo({ top: Math.max(0, yFor(nowMin) - 150), behavior: 'smooth' });
+    }
+  }, [loading]);
+
+  if (loading) return <div className="page-fade" style={{ padding: 40 }}>Crafting your day...</div>;
+
+  const totalH = blocks.reduce((a, b) => a + (minFromMidnight(b.end_time) - minFromMidnight(b.start_time))/60, 0);
+  const doneH  = blocks.filter(b=>b.status==='done').reduce((a, b) => a + (minFromMidnight(b.end_time) - minFromMidnight(b.start_time))/60, 0);
 
   return (
-    <div className="page-fade" ref={scrollRef}>
-      <div className="today-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div className="eyebrow">
-            <span className="label-eyebrow">{dayNames[today.getDay()]} · Day {dayOfYear} of 365</span>
-          </div>
-          <h1>Today</h1>
-          <div className="sub">
-            {dateStr} — {blocks.length} blocks planned
+    <div className="calendar-container">
+      <aside className="cal-left-sidebar">
+        <MiniCalendar />
+        <div className="stats-list">
+          <div className="stat-pill"><span className="label">Planned</span><span className="value">{totalH.toFixed(1)}h</span></div>
+          <div className="stat-pill"><span className="label">Focus Score</span><span className="value">{Math.round((doneH/(totalH||1))*100)}%</span></div>
+        </div>
+        <button className="btn btn-primary btn-block" style={{ marginTop: 'auto' }} onClick={() => navigate('/plan')}><Sparkles size={16}/> Smart Plan</button>
+      </aside>
+
+      <section className="cal-center-view">
+        <header className="cal-header">
+          <h1>{now.toLocaleDateString('default', { weekday: 'long', month: 'short', day: 'numeric' })}</h1>
+          <button className="btn btn-outline" onClick={loadPlan}><RefreshCw size={14}/></button>
+        </header>
+        
+        <div className="day-stats-row">
+          <div className="day-stat"><span className="val">{blocks.length}</span><span className="lbl">Blocks</span></div>
+          <div className="day-stat"><span className="val">{blocks.filter(b=>b.status==='done').length}</span><span className="lbl">Done</span></div>
+          <div className="day-stat"><span className="val">{Math.round(totalH)}h</span><span className="lbl">Capacity</span></div>
+        </div>
+
+        <div className="cal-grid-scroll" ref={gridRef}>
+          <div className="cal-grid">
+            <div className="cal-time-col">
+              {Array.from({ length: TL_END_H - TL_START_H + 1 }).map((_, i) => (
+                <div key={i} className="cal-time-label">{fmtTime((TL_START_H + i) * 60)}</div>
+              ))}
+            </div>
+            <div className="cal-slots-col" 
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={() => { isDragging.current = false; setDragInfo(null); }}
+            >
+              {Array.from({ length: TL_END_H - TL_START_H + 1 }).map((_, i) => <div key={i} className="cal-hour-row" />)}
+              {nowMin >= TL_START_H * 60 && nowMin <= TL_END_H * 60 && <div className="cal-now-line" style={{ top: yFor(nowMin) }} />}
+              
+              {/* Ghost Block */}
+              {dragInfo && (
+                <div className={`cal-block ghost ${dragInfo.mode === 'create' ? 'creating' : 'modifying'}`} 
+                  style={{ 
+                    top: yFor(dragInfo.startMin), 
+                    height: yFor(dragInfo.endMin) - yFor(dragInfo.startMin),
+                    opacity: 0.5,
+                    background: dragInfo.mode === 'create' ? 'var(--accent)' : 'var(--cat-health)',
+                    border: '2px dashed var(--accent)',
+                    left: 0, width: '100%',
+                    zIndex: 100
+                  }} 
+                />
+              )}
+              {blocks.map(b => (
+                <div key={b.id} 
+                  className={`cal-block ${activeBlock?.id === b.id ? 'active' : ''} ${dragInfo?.blockId === b.id ? 'dragging' : ''}`}
+                  style={{ 
+                    top: yFor(minFromMidnight(b.start_time)), 
+                    height: yFor(minFromMidnight(b.end_time)) - yFor(minFromMidnight(b.start_time)) - 2, 
+                    left: `calc(${b.left}% + 4px)`, 
+                    width: `calc(${b.width}% - 8px)`, 
+                    '--cat': catHex(b.category),
+                    opacity: dragInfo?.blockId === b.id ? 0.3 : 1
+                  }}
+                  onMouseDown={(e) => handleMouseDown(e, b, 'move')}
+                  onClick={(e) => { e.stopPropagation(); setPopover({ block: b, x: e.clientX, y: e.clientY }); }}
+                >
+                  <span className="time">{fmtTime(minFromMidnight(b.start_time))}</span>
+                  <span className="title">{b.title}</span>
+                  
+                  {/* Resize Handle */}
+                  <div className="resizer-s" onMouseDown={(e) => handleMouseDown(e, b, 'resize')} />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-        <button className="btn btn-outline" onClick={() => setShowPlanModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Sparkles size={14} /> {blocks.length > 0 ? 'Re-plan' : 'Plan Day'}
-        </button>
-      </div>
+      </section>
 
-      <div className="today-grid">
-        <div onClick={() => editingId && setEditingId(null)}>
-          <Timeline
-            blocks={blocks}
-            now={now}
-            editingId={editingId}
-            onEdit={setEditingId}
-            onCancel={() => setEditingId(null)}
-            onSave={handleUpdateBlock}
-          />
+      <aside className="cal-right-panel">
+        <div className="now-card" style={{ '--cat': catHex(activeBlock?.category), width: '100%' }}>
+           <span className="now-eyebrow">Focusing On</span>
+           <h2 style={{ fontSize: 24 }}>{activeBlock?.title || 'Relax Time'}</h2>
+           {activeBlock && (
+             <div className="timer-wrap">
+               <CountdownRing remaining={Math.max(0, (new Date(activeBlock.end_time)-now)/1000)} total={(new Date(activeBlock.end_time)-new Date(activeBlock.start_time))/1000} color={catHex(activeBlock.category)} />
+               <div className="timer-center"><span style={{ fontSize: 32, fontWeight: 700 }}>{Math.ceil((new Date(activeBlock.end_time)-now)/60000)}m</span><span className="timer-sub">REMAINING</span></div>
+             </div>
+           )}
+           <div className="now-actions">
+              <button className="btn btn-primary" disabled={!activeBlock} onClick={() => triggerCheckin(activeBlock)}>Complete</button>
+              <button className="btn btn-outline" disabled={!activeBlock} onClick={handleExtend}>+15m</button>
+           </div>
         </div>
-        <NowPanel
-          block={activeBlock}
-          now={now}
-          nextBlocks={nextBlocks}
-          onComplete={() => activeBlock && triggerCheckin({ ...activeBlock, _quickDone: true })}
-        />
-      </div>
+        <div className="up-next" style={{ width: '100%', background: 'var(--bg-3)', border: 'none' }}>
+           <div className="head"><span className="label-eyebrow">Upcoming</span></div>
+           {blocks.filter(b => minFromMidnight(b.start_time) > nowMin).slice(0,3).map(b => (
+             <div key={b.id} className="row" style={{ '--cat': catHex(b.category) }}>
+               <div className="dot"/><div className="name">{b.title}</div><div className="when">{fmtTime(minFromMidnight(b.start_time))}</div>
+             </div>
+           ))}
+        </div>
+      </aside>
 
-      {(showCheckinModal || localCheckin) && (
-        <CheckInModal
-          block={activeBlock}
-          onClose={() => { dismissCheckin(); setLocalCheckin(false); }}
-          onChoose={() => { dismissCheckin(); setLocalCheckin(false); }}
-        />
-      )}
-
-      {showPlanModal && (
-        <QuickPlanModal
-          currentBlocks={blocks}
-          onClose={() => setShowPlanModal(false)}
-          onConfirm={handleConfirmPlan}
-        />
-      )}
+      {popover && <BlockPopover block={popover.block} position={{ x: Math.min(window.innerWidth - 340, popover.x), y: Math.min(window.innerHeight - 400, popover.y) }} onClose={()=>setPopover(null)} onSave={handleSaveBlock} onDelete={handleDeleteBlock} />}
+      {showCheckinModal && <div className="modal-back" onClick={dismissCheckin}><div className="modal" onClick={e=>e.stopPropagation()}><h3>Checkpoint</h3><div className="popover-actions"><button className="btn btn-primary" onClick={dismissCheckin}>Done</button></div></div></div>}
     </div>
   );
 }

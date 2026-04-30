@@ -62,6 +62,9 @@ export const plan = {
   updateBlock(id, data) {
     return api.put(`/api/plan/blocks/${id}`, data);
   },
+  createBlock(data) {
+    return api.post('/api/plan/blocks', data);
+  },
 };
 
 /* ── Check-ins ───────────────────────────────────────────── */

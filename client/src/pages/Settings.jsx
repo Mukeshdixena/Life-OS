@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore, CATEGORY_COLORS } from '../store/useStore';
 import { Plus, GripVertical } from 'lucide-react';
 import * as api from '../api/index';
@@ -205,19 +206,20 @@ function StubTab({ label }) {
 
 /* ── DataTab ─────────────────────────────────────────────────── */
 function DataTab() {
-  const logout = useStore(s => s.logout);
   const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
 
   const handleDelete = async () => {
-    if (!window.confirm("Are you absolutely sure you want to delete your account? This action cannot be undone and will erase all your plans, habits, and logs forever.")) {
+    if (!window.confirm("Are you absolutely sure you want to erase all your data? This will permanently remove all your plans, habits, and logs while keeping your account. This action cannot be undone.")) {
       return;
     }
     setDeleting(true);
     try {
-      await api.settings.deleteAccount();
-      logout();
+      await api.settings.deleteAccount(); // This now only clears data on backend
+      // Refresh the app state or redirect
+      window.location.href = '/'; // Simple way to force state reload to empty
     } catch (err) {
-      alert("Failed to delete account. Please try again.");
+      alert("Failed to erase data. Please try again.");
       setDeleting(false);
     }
   };
@@ -226,10 +228,10 @@ function DataTab() {
     <div className="card card-tall" style={{ border: '1px solid #E0524A33' }}>
       <div className="label-eyebrow" style={{ color: '#E0524A' }}>Danger Zone</div>
       <h2 style={{ fontFamily: 'DM Serif Display', fontSize: 26, margin: '6px 0 12px', letterSpacing: '-0.01em' }}>
-        Erase Everything
+        Reset All Data
       </h2>
       <p style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
-        This will permanently delete your account, including all your daily plans, time blocks, check-ins, and habits. There are no backups, and this action cannot be undone.
+        This will permanently erase all your data, including daily plans, time blocks, and habits. Your user profile and account will remain intact so you can start fresh.
       </p>
       <button className="btn btn-outline" onClick={handleDelete} disabled={deleting} style={{ color: '#E0524A', borderColor: '#E0524A' }}>
         {deleting ? 'Erasing...' : 'Restart & Clear All Data'}
@@ -260,7 +262,7 @@ export default function Settings() {
   ];
 
   return (
-    <div className="page-fade">
+    <div className="page-fade page-pad">
       <div className="dash-head">
         <div>
           <div className="label-eyebrow" style={{ marginBottom: 4 }}>Configuration</div>

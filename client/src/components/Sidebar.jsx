@@ -1,16 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import {
-  Home, CalendarPlus, CheckSquare, BarChart3, Clock, Settings,
-  Sun, Moon,
-} from 'lucide-react';
+import { Home, CheckSquare, BarChart3, Clock, Settings, Sun, Moon, LogOut } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { to: '/today',     Icon: Home,          label: 'Today'     },
-  { to: '/review',    Icon: CheckSquare,   label: 'Review'    },
-  { to: '/dashboard', Icon: BarChart3,     label: 'Dashboard' },
-  { to: '/history',   Icon: Clock,         label: 'History'   },
-  { to: '/settings',  Icon: Settings,      label: 'Settings'  },
+  { to: '/today',     Icon: Home,        label: 'Today'     },
+  { to: '/review',    Icon: CheckSquare, label: 'Review'    },
+  { to: '/dashboard', Icon: BarChart3,   label: 'Dashboard' },
+  { to: '/history',   Icon: Clock,       label: 'History'   },
+  { to: '/settings',  Icon: Settings,    label: 'Settings'  },
 ];
 
 function initials(name) {
@@ -26,64 +23,54 @@ export default function Sidebar() {
   const logout      = useStore((s) => s.logout);
   const navigate    = useNavigate();
 
-  const firstName = user?.name?.split(' ')[0] || 'You';
+  const firstName      = user?.name?.split(' ')[0] || 'You';
   const avatarInitials = initials(user?.name || '');
 
   return (
-    <aside className="sidebar">
+    <header className="top-nav">
       {/* Brand */}
-      <div className="brand">
+      <div className="top-nav-brand" onClick={() => navigate('/today')}>
         <div className="brand-mark" />
-        <div className="brand-name-wrap">
-          <div className="brand-name">Life OS</div>
-        </div>
-        <div className="brand-dot" />
+        <span className="brand-name">Life OS</span>
       </div>
 
-      {/* Nav */}
-      <nav className="nav" style={{ flex: 1 }}>
+      {/* Nav links */}
+      <nav className="top-nav-links">
         {NAV_ITEMS.map(({ to, Icon, label }) => (
           <NavLink
             key={to}
             to={to}
-            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            className={({ isActive }) => `top-nav-item${isActive ? ' active' : ''}`}
           >
-            <Icon size={17} />
+            <Icon size={16} />
             <span>{label}</span>
           </NavLink>
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="sidebar-foot">
-        {/* User row */}
-        <div className="user-row" style={{ cursor: 'pointer' }} onClick={() => navigate('/settings')}>
-          <div className="avatar">{avatarInitials}</div>
-          <div style={{ minWidth: 0 }}>
-            <div className="user-name">{firstName}</div>
-            <div className="user-sub" onClick={(e) => { e.stopPropagation(); logout(); }} style={{ cursor: 'pointer' }}>
-              Sign out
-            </div>
-          </div>
+      {/* Right controls */}
+      <div className="top-nav-right">
+        <button
+          id="theme-toggle-btn"
+          className="top-nav-icon-btn"
+          title="Toggle theme"
+          onClick={toggleTheme}
+        >
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+
+        <div className="top-nav-avatar" title={firstName} onClick={() => navigate('/settings')}>
+          {avatarInitials}
         </div>
 
-        {/* Theme toggle */}
-        <div className="theme-toggle">
-          <div className="pill-slide" />
-          <button
-            className={theme === 'light' ? 'active' : ''}
-            onClick={() => theme !== 'light' && toggleTheme()}
-          >
-            <Sun size={12} /> Light
-          </button>
-          <button
-            className={theme === 'dark' ? 'active' : ''}
-            onClick={() => theme !== 'dark' && toggleTheme()}
-          >
-            <Moon size={12} /> Dark
-          </button>
-        </div>
+        <button
+          className="top-nav-icon-btn"
+          title="Sign out"
+          onClick={logout}
+        >
+          <LogOut size={16} />
+        </button>
       </div>
-    </aside>
+    </header>
   );
 }

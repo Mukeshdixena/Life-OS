@@ -182,19 +182,31 @@ router.post('/habit-logs', async (req, res) => {
   }
 });
 
-// DELETE /api/settings/account
+// DELETE /api/settings/account (Clear All Data - Keeps User)
 router.delete('/account', async (req, res) => {
   const userId = req.user.id;
+  const client = await pool.connect();
   try {
-    // This will cascade delete all plans, blocks, checkins, habits, etc.
-    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({ success: true, message: 'Account and all data deleted successfully' });
+    await client.query('BEGIN');
+    
+    // Delete data from all user-related tables
+    await client.query('DELETE FROM checkins WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM time_blocks WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM daily_plans WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM habit_logs WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM habits WHERE user_id = $1', [userId]);
+    
+    // Optionally clear user-specific settings if desired, but keep the record
+    await client.query("UPDATE users SET settings = '{}' WHERE id = $1", [userId]);
+
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'All user data erased successfully. Account preserved.' });
   } catch (err) {
-    console.error('Account DELETE error:', err);
-    res.status(500).json({ error: 'Failed to delete account' });
+    await client.query('ROLLBACK');
+    console.error('Data clear error:', err);
+    res.status(500).json({ error: 'Failed to erase data' });
+  } finally {
+    client.release();
   }
 });
 

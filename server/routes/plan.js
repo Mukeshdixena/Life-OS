@@ -147,7 +147,57 @@ router.get('/today', async (req, res) => {
   }
 });
 
-// PUT /api/plan/blocks/:id
+// POST /api/plan/blocks
+router.post('/blocks', async (req, res) => {
+  const userId = req.user.id;
+  const { title, category, start_time, end_time, color } = req.body;
+
+  if (!title || !start_time || !end_time) {
+    return res.status(400).json({ error: 'title, start_time, and end_time are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Find or create today's plan
+    let planResult = await client.query(
+      'SELECT id FROM daily_plans WHERE user_id = $1 AND date = $2',
+      [userId, today]
+    );
+
+    let planId;
+    if (planResult.rows.length === 0) {
+      const newPlan = await client.query(
+        'INSERT INTO daily_plans (user_id, date) VALUES ($1, $2) RETURNING id',
+        [userId, today]
+      );
+      planId = newPlan.rows[0].id;
+    } else {
+      planId = planResult.rows[0].id;
+    }
+
+    // Insert the block
+    const blockResult = await client.query(
+      `INSERT INTO time_blocks (plan_id, user_id, title, category, start_time, end_time, planned_start, planned_end, color, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $5, $6, $7, 'pending')
+       RETURNING *`,
+      [planId, userId, title, category || 'work', start_time, end_time, color || '#6B7280']
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json(blockResult.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Block create error:', err);
+    res.status(500).json({ error: 'Failed to create block' });
+  } finally {
+    client.release();
+  }
+});
+
 router.put('/blocks/:id', async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
