@@ -42,6 +42,7 @@ router.post('/register', async (req, res) => {
     console.error('Register error:', err);
     res.status(500).json({ 
       error: 'Server error during registration', 
+      message: err.message,
       details: err.message 
     });
   }
@@ -80,6 +81,7 @@ router.post('/login', async (req, res) => {
     console.error('Login error:', err);
     res.status(500).json({ 
       error: 'Server error during login', 
+      message: err.message,
       details: err.message 
     });
   }

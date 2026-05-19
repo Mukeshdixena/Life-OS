@@ -23,7 +23,12 @@ export default function Register() {
       setToken(data.token);
       navigate('/today');
     } catch (err) {
-      setError(err?.response?.data?.message || 'Registration failed. Please try again.');
+      setError(
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.response?.data?.details ||
+        'Registration failed. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
