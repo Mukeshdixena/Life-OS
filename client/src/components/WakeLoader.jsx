@@ -12,7 +12,7 @@ const STATUSES = [
   'Almost there…',
 ];
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://life-os-hmge.onrender.com';
+const API_BASE = 'https://life-os-hmge.onrender.com';
 const POLL_MS = 3000;
 const TIMEOUT_MS = 75_000;
 

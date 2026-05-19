@@ -1,8 +1,10 @@
 import axios from 'axios';
 
 /* ── Axios Instance ──────────────────────────────────────── */
+const API_BASE_URL = 'https://life-os-hmge.onrender.com';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://life-os-hmge.onrender.com',
+  baseURL: API_BASE_URL,
   timeout: 60000,
 });
 

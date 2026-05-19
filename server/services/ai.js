@@ -38,7 +38,7 @@ async function generateDayPlan(prompt, userContext, attempt = 1) {
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.CLIENT_URL || 'https://life-os-client.vercel.app',
+          'HTTP-Referer': 'https://life-os-client.vercel.app',
           'X-Title': 'Life OS',
         },
         timeout: 45000, // 45 seconds timeout

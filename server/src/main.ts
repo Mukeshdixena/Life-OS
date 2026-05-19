@@ -3,14 +3,11 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const allowedOrigins = (process.env.CLIENT_URL || 'https://life-os-client.vercel.app,http://localhost:5173')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  const CLIENT_ORIGIN = 'https://life-os-client.vercel.app';
 
   app.enableCors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || origin === CLIENT_ORIGIN) {
         return callback(null, true);
       }
 
