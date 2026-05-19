@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useStore } from './store/useStore';
 
@@ -11,6 +11,7 @@ import History from './pages/History';
 import Settings from './pages/Settings';
 
 import Layout from './components/Layout';
+import WakeLoader from './components/WakeLoader';
 
 function ProtectedRoute({ children }) {
   const token = useStore((s) => s.token);
@@ -21,6 +22,7 @@ function ProtectedRoute({ children }) {
 export default function App() {
   const theme = useStore((s) => s.theme);
   const initTheme = useStore((s) => s.initTheme);
+  const [backendReady, setBackendReady] = useState(false);
 
   useEffect(() => {
     initTheme();
@@ -29,6 +31,10 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  if (!backendReady) {
+    return <WakeLoader onReady={() => setBackendReady(true)} />;
+  }
 
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
