@@ -6,9 +6,10 @@ const pool = require('../db');
 const router = express.Router();
 
 function signToken(user) {
+  const secret = process.env.JWT_SECRET || 'life-os-default-jwt-secret-key-12345';
   return jwt.sign(
     { id: user.id, email: user.email, name: user.name },
-    process.env.JWT_SECRET,
+    secret,
     { expiresIn: '7d' }
   );
 }

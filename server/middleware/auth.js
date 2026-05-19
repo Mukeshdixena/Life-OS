@@ -10,7 +10,8 @@ function authenticate(req, res, next) {
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET || 'life-os-default-jwt-secret-key-12345';
+    const decoded = jwt.verify(token, secret);
     req.user = decoded;
     next();
   } catch (err) {
