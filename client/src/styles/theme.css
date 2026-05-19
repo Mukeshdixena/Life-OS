@@ -1299,8 +1299,58 @@ html, body {
 .popover-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 8px;
+}
+
+/* Popover read-only view */
+.popover-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.popover-ro-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.popover-ro-cat {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  text-transform: capitalize;
+  letter-spacing: 0.03em;
+}
+
+/* Pending drag-save notification bar */
+.pending-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-2));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  font-size: 13px;
+  color: var(--text-2);
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.pending-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-weight: 500;
 }
 
 /* Animations & Transitions */

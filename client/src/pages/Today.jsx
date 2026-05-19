@@ -93,6 +93,7 @@ function layoutBlocks(blocks) {
 /* ── Components ─────────────────────────────────────────────── */
 
 function BlockPopover({ block, position, onClose, onSave, onDelete }) {
+  const [isEditing, setIsEditing] = useState(!block); // new blocks start in edit mode
   const [title, setTitle] = useState(block?.title || '');
   const [category, setCategory] = useState(block?.category || 'work');
   const [startTime, setStartTime] = useState(block ? new Date(block.start_time).toTimeString().slice(0,5) : (position.startTime || '09:00'));
@@ -112,42 +113,68 @@ function BlockPopover({ block, position, onClose, onSave, onDelete }) {
     setSaving(false);
   };
 
+  const handleCancelEdit = () => {
+    setTitle(block.title);
+    setCategory(block.category);
+    setStartTime(new Date(block.start_time).toTimeString().slice(0,5));
+    setEndTime(new Date(block.end_time).toTimeString().slice(0,5));
+    setIsEditing(false);
+  };
+
   return (
     <div className="block-popover" style={{ top: position.y, left: position.x }}>
       <div className="popover-header">
-        <h3>{block ? 'Edit Block' : 'New Block'}</h3>
+        <h3>{block ? block.title : 'New Block'}</h3>
         <button className="btn btn-ghost" onClick={onClose}><X size={16}/></button>
       </div>
-      
-      <div className="popover-field">
-        <label>Title</label>
-        <input className="popover-input" value={title} onChange={e=>setTitle(e.target.value)} autoFocus />
-      </div>
 
-      <div className="popover-field">
-        <label>Category</label>
-        <select className="popover-input" value={category} onChange={e=>setCategory(e.target.value)}>
-          {Object.keys(CAT_HEX).map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-      </div>
-
-      <div style={{ display: 'flex', gap: 12 }}>
-        <div className="popover-field" style={{ flex: 1 }}>
-          <label>Start</label>
-          <input type="time" className="popover-input" value={startTime} onChange={e=>setStartTime(e.target.value)} />
-        </div>
-        <div className="popover-field" style={{ flex: 1 }}>
-          <label>End</label>
-          <input type="time" className="popover-input" value={endTime} onChange={e=>setEndTime(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="popover-actions">
-        {block && <button className="btn btn-ghost" onClick={()=>onDelete(block.id)} style={{ color: '#E0524A', marginRight: 'auto' }}><Trash2 size={16}/></button>}
-        <button className="btn btn-primary" onClick={handleSubmit} disabled={saving || !title.trim()}>
-          {saving ? 'Saving...' : 'Save Block'}
-        </button>
-      </div>
+      {isEditing ? (
+        <>
+          <div className="popover-field">
+            <label>Title</label>
+            <input className="popover-input" value={title} onChange={e=>setTitle(e.target.value)} autoFocus={!block} />
+          </div>
+          <div className="popover-field">
+            <label>Category</label>
+            <select className="popover-input" value={category} onChange={e=>setCategory(e.target.value)}>
+              {Object.keys(CAT_HEX).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="popover-field" style={{ flex: 1 }}>
+              <label>Start</label>
+              <input type="time" className="popover-input" style={{ width: '100%' }} value={startTime} onChange={e=>setStartTime(e.target.value)} />
+            </div>
+            <div className="popover-field" style={{ flex: 1 }}>
+              <label>End</label>
+              <input type="time" className="popover-input" style={{ width: '100%' }} value={endTime} onChange={e=>setEndTime(e.target.value)} />
+            </div>
+          </div>
+          <div className="popover-actions">
+            {block && <button className="btn btn-ghost" onClick={()=>onDelete(block.id)} style={{ color: '#E0524A', marginRight: 'auto' }}><Trash2 size={16}/></button>}
+            {block && <button className="btn btn-ghost" onClick={handleCancelEdit}>Cancel</button>}
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={saving || !title.trim()}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="popover-readonly">
+            <div className="popover-ro-row">
+              <span className="popover-ro-cat" style={{ background: catHex(category) }}>{category}</span>
+            </div>
+            <div className="popover-ro-row">
+              <Clock size={13} />
+              <span>{startTime} – {endTime}</span>
+            </div>
+          </div>
+          <div className="popover-actions">
+            <button className="btn btn-ghost" onClick={()=>onDelete(block.id)} style={{ color: '#E0524A', marginRight: 'auto' }}><Trash2 size={16}/></button>
+            <button className="btn btn-primary" onClick={()=>setIsEditing(true)}><Pencil size={14}/> Edit</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -205,10 +232,12 @@ export default function Today() {
   const dismissCheckin = useStore(s => s.dismissCheckin);
 
   const [loading, setLoading] = useState(true);
-  const [popover, setPopover] = useState(null); 
+  const [popover, setPopover] = useState(null);
   const [dragInfo, setDragInfo] = useState(null); // { mode, startMin, endMin, blockId, offset }
   const gridRef = useRef(null);
   const isDragging = useRef(false);
+  const hasMoved = useRef(false);
+  const [pendingChanges, setPendingChanges] = useState(null); // { id, data } awaiting manual save
 
   const loadPlan = async () => {
     setLoading(true);
@@ -252,10 +281,12 @@ export default function Today() {
     }
     
     isDragging.current = true;
+    hasMoved.current = false;
   };
 
   const handleMouseMove = (e) => {
     if (!isDragging.current || !dragInfo) return;
+    hasMoved.current = true;
     const rect = gridRef.current.getBoundingClientRect();
     const y = e.clientY - rect.top + gridRef.current.scrollTop;
     const currentMin = Math.round((y / PX_PER_HOUR) * 4) * 15 + TL_START_H * 60;
@@ -289,12 +320,15 @@ export default function Today() {
         startTime: fmtTime24(startMin), endTime: fmtTime24(end) 
       });
     } else {
+      if (!hasMoved.current) return; // click without drag — let onClick open the popover
       const datePrefix = new Date().toISOString().split('T')[0];
       const data = {
         start_time: `${datePrefix}T${fmtTime24(startMin)}:00Z`,
         end_time: `${datePrefix}T${fmtTime24(endMin)}:00Z`,
       };
-      await handleSaveBlock(blockId, data);
+      // Optimistic local update — user must click Save to persist
+      useStore.getState().updateBlock(blockId, data);
+      setPendingChanges({ id: blockId, data });
     }
   };
 
@@ -338,6 +372,25 @@ export default function Today() {
     await handleSaveBlock(activeBlock.id, { end_time: newEnd.toISOString() });
   };
 
+  const handleSavePending = async () => {
+    if (!pendingChanges) return;
+    try {
+      const res = await api.plan.updateBlock(pendingChanges.id, pendingChanges.data);
+      useStore.getState().updateBlock(pendingChanges.id, res.data);
+      setPendingChanges(null);
+    } catch (err) {
+      console.error(err);
+      alert('Error saving changes');
+      await loadPlan();
+      setPendingChanges(null);
+    }
+  };
+
+  const handleDiscardPending = async () => {
+    await loadPlan();
+    setPendingChanges(null);
+  };
+
   useEffect(() => {
     if (!loading && gridRef.current) {
       gridRef.current.scrollTo({ top: Math.max(0, yFor(nowMin) - 150), behavior: 'smooth' });
@@ -365,7 +418,17 @@ export default function Today() {
           <h1>{now.toLocaleDateString('default', { weekday: 'long', month: 'short', day: 'numeric' })}</h1>
           <button className="btn btn-outline" onClick={loadPlan}><RefreshCw size={14}/></button>
         </header>
-        
+
+        {pendingChanges && (
+          <div className="pending-bar">
+            <span className="pending-label"><AlertCircle size={14}/> Block moved — unsaved</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={handleDiscardPending}>Discard</button>
+              <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={handleSavePending}>Save Changes</button>
+            </div>
+          </div>
+        )}
+
         <div className="day-stats-row">
           <div className="day-stat"><span className="val">{blocks.length}</span><span className="lbl">Blocks</span></div>
           <div className="day-stat"><span className="val">{blocks.filter(b=>b.status==='done').length}</span><span className="lbl">Done</span></div>
