@@ -40,7 +40,10 @@ router.post('/register', async (req, res) => {
     res.status(201).json({ token, user });
   } catch (err) {
     console.error('Register error:', err);
-    res.status(500).json({ error: 'Server error during registration' });
+    res.status(500).json({ 
+      error: 'Server error during registration', 
+      details: err.message 
+    });
   }
 });
 
@@ -75,7 +78,10 @@ router.post('/login', async (req, res) => {
     res.json({ token, user: safeUser });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ error: 'Server error during login' });
+    res.status(500).json({ 
+      error: 'Server error during login', 
+      details: err.message 
+    });
   }
 });
 
