@@ -2,7 +2,7 @@ import axios from 'axios';
 
 /* ── Axios Instance ──────────────────────────────────────── */
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: import.meta.env.VITE_API_URL || 'https://life-os-hmge.onrender.com',
   timeout: 60000,
 });
 
