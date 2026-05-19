@@ -120,4 +120,11 @@ export const settings = {
   },
 };
 
+/* ── Health ──────────────────────────────────────────────── */
+export const health = {
+  check() {
+    return api.get('/api/health');
+  },
+};
+
 export default api;

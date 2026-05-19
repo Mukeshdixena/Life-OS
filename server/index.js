@@ -38,7 +38,7 @@ app.use('/api/dashboard', authenticate, dashboardRoutes);
 app.use('/api/settings', authenticate, settingsRoutes);
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get(['/', '/api/health'], (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
